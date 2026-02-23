@@ -1,0 +1,6 @@
+@CmdvApi_HostAddress = http://localhost:5191
+
+GET {{CmdvApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
