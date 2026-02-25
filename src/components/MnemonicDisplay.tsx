@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 
 interface MnemonicDisplayProps {
   words: string[];
@@ -7,6 +9,36 @@ interface MnemonicDisplayProps {
 
 export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   const [confirmed, setConfirmed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (format: "pdf" | "txt") => {
+    const ext = format === "pdf" ? "pdf" : "txt";
+    const defaultName =
+      format === "pdf" ? "cmd-recovery-kit.pdf" : "cmd-recovery-phrase.txt";
+
+    const path = await save({
+      defaultPath: defaultName,
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+    });
+
+    if (!path) return;
+
+    setSaving(true);
+    try {
+      await invoke("export_mnemonic", { path, words, format });
+    } catch (e) {
+      console.error("Export failed:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(words.join(" "));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="space-y-6 max-w-md mx-auto p-6">
@@ -32,6 +64,29 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleSave("pdf")}
+          disabled={saving}
+          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+        >
+          Save as PDF
+        </button>
+        <button
+          onClick={() => handleSave("txt")}
+          disabled={saving}
+          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+        >
+          Save as Text
+        </button>
+        <button
+          onClick={handleCopy}
+          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
       </div>
 
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
