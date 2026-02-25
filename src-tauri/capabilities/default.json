@@ -14,6 +14,7 @@
     "core:window:allow-is-visible",
     "core:tray:default",
     "global-shortcut:default",
-    "positioner:default"
+    "positioner:default",
+    "dialog:default"
   ]
 }

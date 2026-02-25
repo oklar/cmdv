@@ -41,6 +41,7 @@ fn show_window(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -127,6 +128,7 @@ pub fn run() {
             commands::vault::unlock_vault,
             commands::vault::recover_vault,
             commands::vault::lock_vault,
+            commands::vault::export_mnemonic,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
