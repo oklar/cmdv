@@ -94,27 +94,14 @@ pub fn run() {
                 .expect("failed to resolve app data dir");
             std::fs::create_dir_all(&db_path).ok();
 
-            // Settings DB opens first (plain SQLite, needed to check reset flag)
-            let settings_file = db_path.join("settings.db");
-            let settings_db =
-                db::settings::SettingsDb::open(&settings_file).expect("failed to open settings db");
-
-            // Handle pending reset from previous session
             let db_file = db_path.join("cmdv.db");
-            if settings_db.get_value("pending_db_delete").as_deref() == Some("true") {
-                for name in &["cmdv.db", "cmdv.db-wal", "cmdv.db-shm"] {
-                    let f = db_path.join(name);
-                    if f.exists() {
-                        std::fs::remove_file(&f).ok();
-                    }
-                }
-                log::info!("Deleted cmdv.db (+ WAL/SHM) from pending reset");
-                settings_db.set_value("pending_db_delete", "").ok();
-            }
-
             let db = db::Database::open_encrypted(&db_file).expect("failed to open database");
             let db = Arc::new(db);
             app.manage(db.clone());
+
+            let settings_file = db_path.join("settings.db");
+            let settings_db =
+                db::settings::SettingsDb::open(&settings_file).expect("failed to open settings db");
             app.manage(Arc::new(settings_db));
 
             // --- Vault state (locked until user authenticates) ---
@@ -134,6 +121,7 @@ pub fn run() {
             commands::clipboard::search_entries,
             commands::clipboard::toggle_favorite,
             commands::clipboard::delete_entry,
+            commands::clipboard::clear_all_entries,
             commands::clipboard::get_stats,
             commands::settings::get_settings,
             commands::settings::update_settings,

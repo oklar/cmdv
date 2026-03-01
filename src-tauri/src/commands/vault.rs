@@ -239,10 +239,21 @@ pub fn reset_vault(
     let keychain = KeychainStore::new();
     let _ = keychain.delete_seed();
 
-    // Wipe clipboard data while connection is still open
-    let _ = db.wipe_all();
+    // Close the DB connection so the file lock is released
+    db.close();
 
-    // Clear all vault/auth settings
+    // Delete DB files
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .expect("failed to resolve app data dir");
+    for name in &["cmdv.db", "cmdv.db-wal", "cmdv.db-shm"] {
+        let f = db_path.join(name);
+        if f.exists() {
+            std::fs::remove_file(&f).ok();
+        }
+    }
+
     for key in &[
         "vault_setup_complete",
         "vault_encrypted_master_key",
@@ -257,10 +268,7 @@ pub fn reset_vault(
         settings_db.set_value(key, "").ok();
     }
 
-    // Flag for startup to delete the DB file (can't delete while connection is open)
-    settings_db.set_value("pending_db_delete", "true").ok();
-
-    log::info!("Vault reset — exiting app");
+    log::info!("Vault reset complete — exiting app");
     app.exit(0);
     Ok(())
 }

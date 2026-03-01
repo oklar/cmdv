@@ -126,6 +126,11 @@ pub fn delete_entry(db: State<'_, Arc<Database>>, id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub fn clear_all_entries(db: State<'_, Arc<Database>>) -> Result<(), String> {
+    db.wipe_all().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn get_stats(db: State<'_, Arc<Database>>) -> Result<StatsView, String> {
     let total_entries = db.get_entry_count().map_err(|e| e.to_string())?;
     let total_size_bytes = db.get_total_size().map_err(|e| e.to_string())?;
