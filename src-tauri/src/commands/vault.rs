@@ -97,10 +97,12 @@ pub fn setup_vault(
 
     keychain.save_seed(master_key.as_bytes())?;
 
-    let app_keys = AppKeys {
-        entry_key: master_key.derive_entry_key(),
-        hash_key: master_key.derive_hash_key(),
-    };
+    let app_keys = AppKeys::new(
+        master_key.derive_entry_key(),
+        master_key.derive_hash_key(),
+        master_key.derive_db_key(),
+    );
+    db.set_encryption_key(&app_keys.db_key)?;
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
     start_monitoring(&vault, &db, &settings_db);
@@ -142,10 +144,12 @@ pub fn unlock_vault(
             bytes.copy_from_slice(&seed[..32]);
             let master_key = MasterKey::from_bytes(bytes);
 
-            let app_keys = AppKeys {
-                entry_key: master_key.derive_entry_key(),
-                hash_key: master_key.derive_hash_key(),
-            };
+            let app_keys = AppKeys::new(
+                master_key.derive_entry_key(),
+                master_key.derive_hash_key(),
+                master_key.derive_db_key(),
+            );
+            db.set_encryption_key(&app_keys.db_key)?;
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
             start_monitoring(&vault, &db, &settings_db);
@@ -199,10 +203,12 @@ pub fn recover_vault(
     let keychain = KeychainStore::new();
     keychain.save_seed(master_key.as_bytes())?;
 
-    let app_keys = AppKeys {
-        entry_key: master_key.derive_entry_key(),
-        hash_key: master_key.derive_hash_key(),
-    };
+    let app_keys = AppKeys::new(
+        master_key.derive_entry_key(),
+        master_key.derive_hash_key(),
+        master_key.derive_db_key(),
+    );
+    db.set_encryption_key(&app_keys.db_key)?;
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
     start_monitoring(&vault, &db, &settings_db);
@@ -356,20 +362,225 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
 
     let settings = settings_db.get_settings();
     let max_entry_size = settings.max_entry_size_bytes as usize;
+    let max_total_size = settings.max_total_size_bytes;
+    let sensitive_expire_secs = settings.sensitive_auto_expire_secs;
+    let excluded_apps = settings.excluded_apps.clone();
     let poll_db = db.clone();
 
     std::thread::spawn(move || {
-        let mut monitor = clipboard::ClipboardMonitor::new();
+        let mut monitor = clipboard::ClipboardMonitor::new()
+            .with_excluded_apps(excluded_apps);
+        let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
             match monitor.poll_once(&poll_db, &entry_key, &hash_key, max_entry_size) {
-                Ok(Some(id)) => log::info!("Captured clipboard entry: {}", id),
+                Ok(Some(id)) => {
+                    log::info!("Captured clipboard entry: {}", id);
+                    enforce_storage_limit(&poll_db, max_total_size);
+                }
                 Ok(None) => {}
                 Err(e) => log::warn!("Clipboard poll error: {}", e),
             }
+
+            // Every 30 seconds, expire old sensitive entries
+            tick_count += 1;
+            if tick_count % 30 == 0 && sensitive_expire_secs > 0 {
+                match poll_db.delete_expired_sensitive(sensitive_expire_secs) {
+                    Ok(n) if n > 0 => log::info!("Auto-expired {} sensitive entries", n),
+                    Err(e) => log::warn!("Sensitive expire error: {}", e),
+                    _ => {}
+                }
+            }
+
             std::thread::sleep(Duration::from_secs(1));
         }
         log::info!("Clipboard monitoring stopped");
     });
 
     log::info!("Clipboard monitoring started");
+}
+
+#[tauri::command]
+pub fn export_database(
+    path: String,
+    vault: tauri::State<'_, Arc<VaultState>>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<usize, String> {
+    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
+    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    let blob_key = {
+        let keychain = crate::storage::keychain::KeychainStore::new();
+        let seed = keychain.load_seed()?;
+        let mut master_bytes = [0u8; 32];
+        master_bytes.copy_from_slice(&seed[..32]);
+        let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_key.derive_blob_key()
+    };
+    drop(guard);
+
+    let encrypted = crate::sync::blob::export_to_blob(&db, &blob_key)?;
+    let entry_count = db.get_entry_count().map_err(|e| e.to_string())? as usize;
+    std::fs::write(&path, &encrypted)
+        .map_err(|e| format!("Failed to write export: {}", e))?;
+
+    log::info!("Exported {} entries ({} bytes) to {}", entry_count, encrypted.len(), path);
+    Ok(entry_count)
+}
+
+#[tauri::command]
+pub fn import_database(
+    path: String,
+    vault: tauri::State<'_, Arc<VaultState>>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<usize, String> {
+    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
+    guard.as_ref().ok_or("Vault is locked")?;
+    let blob_key = {
+        let keychain = crate::storage::keychain::KeychainStore::new();
+        let seed = keychain.load_seed()?;
+        let mut master_bytes = [0u8; 32];
+        master_bytes.copy_from_slice(&seed[..32]);
+        let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_key.derive_blob_key()
+    };
+    drop(guard);
+
+    let data = std::fs::read(&path)
+        .map_err(|e| format!("Failed to read import file: {}", e))?;
+    let blob = crate::sync::blob::decrypt_blob(&blob_key, &data)?;
+
+    let local_entries = db.get_all_entries().map_err(|e| e.to_string())?;
+    let merged = crate::sync::conflict::merge_entries(&local_entries, &blob.entries);
+
+    let mut imported = 0;
+    for entry in &merged {
+        if !db.entry_exists_by_hash(&entry.content_hash).map_err(|e| e.to_string())? {
+            let new_entry = crate::db::NewEntry {
+                encrypted_payload: entry.encrypted_payload.clone(),
+                nonce: entry.nonce.clone(),
+                content_type: crate::db::EntryType::from_str(&entry.content_type),
+                content_hash: entry.content_hash.clone(),
+                size_bytes: entry.size_bytes,
+                is_favorite: entry.is_favorite,
+                is_sensitive: entry.is_sensitive,
+                source_app: None,
+            };
+            db.insert_entry(&new_entry).map_err(|e| e.to_string())?;
+            imported += 1;
+        }
+    }
+
+    log::info!("Imported {} new entries from {}", imported, path);
+    Ok(imported)
+}
+
+#[tauri::command]
+pub fn generate_pairing_qr(
+    vault: tauri::State<'_, Arc<VaultState>>,
+) -> Result<String, String> {
+    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
+    if guard.is_none() {
+        return Err("Vault is locked".into());
+    }
+    drop(guard);
+
+    let keychain = crate::storage::keychain::KeychainStore::new();
+    let seed = keychain.load_seed()?;
+    let mut master_bytes = [0u8; 32];
+    master_bytes.copy_from_slice(&seed[..32]);
+    let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+
+    let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
+        .map_err(|e| format!("BIP39 error: {}", e))?;
+    let words: Vec<String> = mnemonic.words().map(String::from).collect();
+    let payload = words.join(" ");
+
+    use qrcode::QrCode;
+    use qrcode::render::svg;
+
+    let code = QrCode::new(payload.as_bytes())
+        .map_err(|e| format!("QR generation error: {}", e))?;
+    let svg_str = code.render::<svg::Color>()
+        .min_dimensions(256, 256)
+        .build();
+
+    let data_url = format!(
+        "data:image/svg+xml;base64,{}",
+        base64::Engine::encode(&B64, svg_str.as_bytes())
+    );
+
+    Ok(data_url)
+}
+
+#[tauri::command]
+pub async fn switch_to_cloud(
+    vault: tauri::State<'_, Arc<VaultState>>,
+    settings_db: tauri::State<'_, Arc<SettingsDb>>,
+    db: tauri::State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    {
+        let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
+        if guard.is_none() {
+            return Err("Vault is locked".into());
+        }
+    }
+
+    let has_sub = settings_db
+        .get_value("auth_has_subscription")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if !has_sub {
+        return Err("Cloud sync requires an active subscription".into());
+    }
+
+    let mut settings = settings_db.get_settings();
+    settings.mode = crate::db::settings::AppMode::Cloud;
+    settings_db.save_settings(&settings)?;
+
+    // Trigger initial sync upload
+    let blob_key = {
+        let keychain = crate::storage::keychain::KeychainStore::new();
+        let seed = keychain.load_seed().map_err(|e| e.to_string())?;
+        let mut master_bytes = [0u8; 32];
+        master_bytes.copy_from_slice(&seed[..32]);
+        let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_key.derive_blob_key()
+    };
+
+    let encrypted = crate::sync::blob::export_to_blob(&db, &blob_key)?;
+    log::info!("Initial cloud sync: exported {} bytes", encrypted.len());
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn switch_to_local(
+    settings_db: tauri::State<'_, Arc<SettingsDb>>,
+) -> Result<(), String> {
+    let mut settings = settings_db.get_settings();
+    settings.mode = crate::db::settings::AppMode::Local;
+    settings_db.save_settings(&settings)?;
+    log::info!("Switched to local-only mode");
+    Ok(())
+}
+
+fn enforce_storage_limit(db: &Database, max_total_size: i64) {
+    let total = match db.get_total_size() {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("Failed to get total size: {}", e);
+            return;
+        }
+    };
+    if total > max_total_size {
+        let excess = total - max_total_size;
+        match db.prune_oldest_non_favorites(excess) {
+            Ok(n) if n > 0 => log::info!(
+                "Pruned {} entries to free {} bytes (total was {}, limit {})",
+                n, excess, total, max_total_size
+            ),
+            Err(e) => log::warn!("Prune error: {}", e),
+            _ => {}
+        }
+    }
 }

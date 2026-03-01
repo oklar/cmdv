@@ -1,59 +1,30 @@
 use arboard::Clipboard;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
 use crate::sensitive;
 
+use super::source;
+
 pub struct ClipboardMonitor {
-    running: AtomicBool,
     last_text_hash: Option<Vec<u8>>,
     last_image_hash: Option<Vec<u8>>,
+    excluded_apps: Vec<String>,
 }
 
 impl ClipboardMonitor {
     pub fn new() -> Self {
         Self {
-            running: AtomicBool::new(false),
             last_text_hash: None,
             last_image_hash: None,
+            excluded_apps: Vec::new(),
         }
     }
 
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
-
-    pub fn start(
-        &mut self,
-        _db: std::sync::Arc<Database>,
-        encryption_key: &[u8; 32],
-        hash_key: &[u8; 32],
-        poll_interval: Duration,
-        _max_entry_size: usize,
-        _max_total_size: usize,
-    ) -> Result<(), String> {
-        if self.is_running() {
-            return Err("Monitor already running".into());
-        }
-        self.running.store(true, Ordering::Relaxed);
-
-        let _enc_key = *encryption_key;
-        let _h_key = *hash_key;
-        let _running = &self.running as *const AtomicBool;
-
-        log::info!(
-            "Clipboard monitor started (poll interval: {:?})",
-            poll_interval
-        );
-
-        Ok(())
-    }
-
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::Relaxed);
-        log::info!("Clipboard monitor stopped");
+    pub fn with_excluded_apps(mut self, apps: Vec<String>) -> Self {
+        self.excluded_apps = apps;
+        self
     }
 
     pub fn poll_once(
@@ -63,6 +34,19 @@ impl ClipboardMonitor {
         hash_key: &[u8; 32],
         max_entry_size: usize,
     ) -> Result<Option<String>, String> {
+        // Skip if clipboard is marked as concealed by the OS
+        if sensitive::flags::is_clipboard_concealed() {
+            return Ok(None);
+        }
+
+        // Skip if the source app is in the exclude list
+        let source_app = source::get_foreground_app();
+        if let Some(ref app) = source_app {
+            if source::is_excluded_with_custom(app, &self.excluded_apps) {
+                return Ok(None);
+            }
+        }
+
         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
 
         if let Ok(text) = clipboard.get_text() {
@@ -96,7 +80,7 @@ impl ClipboardMonitor {
                 size_bytes: text.len() as i64,
                 is_favorite: false,
                 is_sensitive,
-                source_app: source::get_foreground_app(),
+                source_app,
             };
 
             let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
@@ -114,5 +98,3 @@ impl Default for ClipboardMonitor {
         Self::new()
     }
 }
-
-use super::source;
