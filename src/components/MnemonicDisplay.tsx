@@ -15,7 +15,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   const handleSave = async (format: "pdf" | "txt") => {
     const ext = format === "pdf" ? "pdf" : "txt";
     const defaultName =
-      format === "pdf" ? "cmd-recovery-kit.pdf" : "cmd-recovery-phrase.txt";
+      format === "pdf" ? "cmdv-recovery-kit.pdf" : "cmdv-recovery-phrase.txt";
 
     const path = await save({
       defaultPath: defaultName,
@@ -48,8 +48,8 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
         </h2>
         <p className="text-zinc-400 text-sm mt-2">
           Write these 24 words down and store them somewhere safe. You will need
-          them to set up CMD on a new device. This is the only time they will be
-          shown.
+          them to set up CMDV on a new device. This is the only time they will
+          be shown.
         </p>
       </div>
 
@@ -92,7 +92,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
         <p className="text-amber-400 text-xs">
           If you lose these words and all your devices, your synced data cannot
-          be recovered. CMD support cannot help — this is by design for your
+          be recovered. CMDV support cannot help — this is by design for your
           security.
         </p>
       </div>

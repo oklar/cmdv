@@ -81,7 +81,7 @@ export function AppLock({ onUnlock }: AppLockProps) {
             </svg>
           </div>
           <h1 className="text-lg font-semibold text-zinc-100">
-            CMD is locked
+            CMDV is locked
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
             {recoveryMode

@@ -220,7 +220,7 @@ export function Settings() {
               onClick={async () => {
                 const path = await save({
                   defaultPath: "cmdv-backup.bin",
-                  filters: [{ name: "CMD Backup", extensions: ["bin"] }],
+                  filters: [{ name: "CMDV Backup", extensions: ["bin"] }],
                 });
                 if (path) {
                   try {
@@ -240,7 +240,7 @@ export function Settings() {
             <button
               onClick={async () => {
                 const path = await open({
-                  filters: [{ name: "CMD Backup", extensions: ["bin"] }],
+                  filters: [{ name: "CMDV Backup", extensions: ["bin"] }],
                   multiple: false,
                 });
                 if (path) {

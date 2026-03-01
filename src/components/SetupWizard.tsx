@@ -58,7 +58,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <span className="text-3xl font-bold text-white">C</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Welcome to CMD</h1>
+              <h1 className="text-2xl font-bold">Welcome to CMDV</h1>
               <p className="text-zinc-400 mt-2 text-sm">
                 Your encrypted clipboard manager. Everything is encrypted
                 locally with a key only you control.
@@ -79,7 +79,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <h2 className="text-xl font-bold">Create your vault password</h2>
               <p className="text-zinc-400 text-sm mt-1">
                 This password protects your encryption key. You'll need it every
-                time you open CMD. Choose something strong.
+                time you open CMDV. Choose something strong.
               </p>
             </div>
 
