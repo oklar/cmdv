@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "cmdv",
   "version": "0.1.0",
-  "identifier": "com.cmdv.clipboard",
+  "identifier": "to.cmdv.clipboard",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",

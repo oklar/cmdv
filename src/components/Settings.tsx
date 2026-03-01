@@ -266,6 +266,8 @@ export function Settings() {
           <AccountSection />
         </div>
       </section>
+
+      <DevSection />
     </div>
   );
 }
@@ -375,6 +377,91 @@ function AccountSection() {
         Cancel
       </button>
     </div>
+  );
+}
+
+function DevSection() {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  const handleReset = async () => {
+    if (confirming !== "reset") {
+      setConfirming("reset");
+      return;
+    }
+    try {
+      await invoke("reset_vault");
+    } catch (err) {
+      alert(String(err));
+      setConfirming(null);
+    }
+  };
+
+  const handleClearEntries = async () => {
+    if (confirming !== "clear") {
+      setConfirming("clear");
+      return;
+    }
+    try {
+      // Delete all entries by getting them and deleting one by one
+      const entries = await invoke<{ id: string }[]>("get_entries", {
+        limit: 10000,
+        offset: 0,
+        filterType: null,
+        favoritesOnly: false,
+      });
+      for (const entry of entries) {
+        await invoke("delete_entry", { id: entry.id });
+      }
+      alert(`Deleted ${entries.length} entries`);
+      setConfirming(null);
+    } catch (err) {
+      alert(String(err));
+      setConfirming(null);
+    }
+  };
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-zinc-300 mb-3">Developer</h2>
+      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-zinc-300">Clear all entries</div>
+            <div className="text-xs text-zinc-500">
+              Delete all clipboard entries but keep vault
+            </div>
+          </div>
+          <button
+            onClick={handleClearEntries}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              confirming === "clear"
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+            }`}
+          >
+            {confirming === "clear" ? "Confirm" : "Clear"}
+          </button>
+        </div>
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-red-400">Reset vault</div>
+            <div className="text-xs text-zinc-500">
+              Wipe everything — DB, keys, keychain. App will restart.
+            </div>
+          </div>
+          <button
+            onClick={handleReset}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              confirming === "reset"
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-zinc-800 hover:bg-zinc-700 text-red-400"
+            }`}
+          >
+            {confirming === "reset" ? "Confirm reset" : "Reset"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

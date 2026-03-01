@@ -115,4 +115,10 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         entries::get_all_entries(&conn)
     }
+
+    pub fn wipe_all(&self) -> Result<(), rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch("DELETE FROM entries_fts; DELETE FROM entries;")?;
+        Ok(())
+    }
 }

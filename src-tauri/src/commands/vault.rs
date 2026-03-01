@@ -5,7 +5,7 @@ use std::time::Duration;
 use base64::Engine;
 use bip39::Mnemonic;
 use serde::Serialize;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::clipboard;
 use crate::crypto::keys::{
@@ -221,6 +221,47 @@ pub fn lock_vault(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
     vault.monitor_stop.store(true, Ordering::Relaxed);
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = None;
     log::info!("Vault locked");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reset_vault(
+    app: tauri::AppHandle,
+    vault: State<'_, Arc<VaultState>>,
+    settings_db: State<'_, Arc<SettingsDb>>,
+    db: State<'_, Arc<Database>>,
+) -> Result<(), String> {
+    vault.monitor_stop.store(true, Ordering::Relaxed);
+    std::thread::sleep(Duration::from_millis(200));
+
+    *vault.keys.lock().map_err(|_| "Lock poisoned")? = None;
+
+    let keychain = KeychainStore::new();
+    let _ = keychain.delete_seed();
+
+    // Wipe clipboard data while connection is still open
+    let _ = db.wipe_all();
+
+    // Clear all vault/auth settings
+    for key in &[
+        "vault_setup_complete",
+        "vault_encrypted_master_key",
+        "vault_password_hash",
+        "vault_password_salt",
+        "auth_email",
+        "auth_access_token",
+        "auth_refresh_token",
+        "auth_has_subscription",
+        "last_sync_at",
+    ] {
+        settings_db.set_value(key, "").ok();
+    }
+
+    // Flag for startup to delete the DB file (can't delete while connection is open)
+    settings_db.set_value("pending_db_delete", "true").ok();
+
+    log::info!("Vault reset — exiting app");
+    app.exit(0);
     Ok(())
 }
 
