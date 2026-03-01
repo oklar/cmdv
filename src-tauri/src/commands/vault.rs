@@ -236,7 +236,7 @@ pub fn export_mnemonic(path: String, words: Vec<String>, format: String) -> Resu
 
 fn generate_txt(words: &[String]) -> String {
     let mut out = String::new();
-    out.push_str("CMD Recovery Phrase\n");
+    out.push_str("CMDV Recovery Phrase\n");
     out.push_str("===================\n\n");
     out.push_str("Keep this file in a safe place. You need these 24 words\n");
     out.push_str("plus your vault password to recover your data.\n\n");
@@ -251,7 +251,7 @@ fn generate_txt(words: &[String]) -> String {
 
 fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::new();
-    lines.push("CMD Recovery Kit".into());
+    lines.push("CMDV Recovery Kit".into());
     lines.push(String::new());
     lines.push("Keep this document in a safe place. You need these 24 words".into());
     lines.push("plus your vault password to recover your data.".into());

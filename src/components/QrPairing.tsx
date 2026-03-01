@@ -20,7 +20,7 @@ export function QrPairing({ onClose }: QrPairingProps) {
       <div>
         <h2 className="text-xl font-bold text-zinc-100">Pair Device</h2>
         <p className="text-zinc-400 text-sm mt-2">
-          Scan this QR code from your other device running CMD to transfer your
+          Scan this QR code from your other device running CMDV to transfer your
           recovery phrase securely.
         </p>
       </div>

@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "CMD Clipboard Manager",
+        "title": "CMDV Clipboard Manager",
         "width": 420,
         "height": 640,
         "minWidth": 360,
