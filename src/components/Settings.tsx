@@ -402,17 +402,8 @@ function DevSection() {
       return;
     }
     try {
-      // Delete all entries by getting them and deleting one by one
-      const entries = await invoke<{ id: string }[]>("get_entries", {
-        limit: 10000,
-        offset: 0,
-        filterType: null,
-        favoritesOnly: false,
-      });
-      for (const entry of entries) {
-        await invoke("delete_entry", { id: entry.id });
-      }
-      alert(`Deleted ${entries.length} entries`);
+      await invoke("clear_all_entries");
+      alert("All entries cleared");
       setConfirming(null);
     } catch (err) {
       alert(String(err));
