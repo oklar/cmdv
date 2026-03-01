@@ -9,7 +9,9 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 const SALT_ENTRY_ENC: &[u8] = b"cmdv-entry-encryption";
 const SALT_HASH_KEY: &[u8] = b"cmdv-hash-key";
 const SALT_BLOB_ENC: &[u8] = b"cmdv-blob-encryption";
+const SALT_DB_ENC: &[u8] = b"cmdv-db-encryption";
 const SALT_WRAP: &[u8] = b"cmdv-wrap-derive";
+const SALT_AUTH: &[u8] = b"cmdv-auth-derive";
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct MasterKey([u8; 32]);
@@ -40,11 +42,76 @@ impl MasterKey {
     pub fn derive_blob_key(&self) -> [u8; 32] {
         derive_key(&self.0, SALT_BLOB_ENC)
     }
+
+    pub fn derive_db_key(&self) -> [u8; 32] {
+        derive_key(&self.0, SALT_DB_ENC)
+    }
 }
 
 pub struct AppKeys {
     pub entry_key: [u8; 32],
     pub hash_key: [u8; 32],
+    pub db_key: [u8; 32],
+}
+
+impl Drop for AppKeys {
+    fn drop(&mut self) {
+        mlock::unlock_mem(&self.entry_key);
+        mlock::unlock_mem(&self.hash_key);
+        mlock::unlock_mem(&self.db_key);
+        self.entry_key.zeroize();
+        self.hash_key.zeroize();
+        self.db_key.zeroize();
+    }
+}
+
+impl AppKeys {
+    pub fn new(entry_key: [u8; 32], hash_key: [u8; 32], db_key: [u8; 32]) -> Self {
+        let keys = Self { entry_key, hash_key, db_key };
+        mlock::lock_mem(&keys.entry_key);
+        mlock::lock_mem(&keys.hash_key);
+        mlock::lock_mem(&keys.db_key);
+        keys
+    }
+}
+
+mod mlock {
+    /// Prevent memory from being swapped to disk.
+    pub fn lock_mem(data: &[u8]) {
+        if data.is_empty() { return; }
+        unsafe { platform_lock(data.as_ptr(), data.len()); }
+    }
+
+    /// Allow memory to be swapped again.
+    pub fn unlock_mem(data: &[u8]) {
+        if data.is_empty() { return; }
+        unsafe { platform_unlock(data.as_ptr(), data.len()); }
+    }
+
+    #[cfg(unix)]
+    unsafe fn platform_lock(ptr: *const u8, len: usize) {
+        libc::mlock(ptr as *const libc::c_void, len);
+    }
+
+    #[cfg(unix)]
+    unsafe fn platform_unlock(ptr: *const u8, len: usize) {
+        libc::munlock(ptr as *const libc::c_void, len);
+    }
+
+    #[cfg(windows)]
+    unsafe fn platform_lock(ptr: *const u8, len: usize) {
+        windows_sys::Win32::System::Memory::VirtualLock(ptr as *mut core::ffi::c_void, len);
+    }
+
+    #[cfg(windows)]
+    unsafe fn platform_unlock(ptr: *const u8, len: usize) {
+        windows_sys::Win32::System::Memory::VirtualUnlock(ptr as *mut core::ffi::c_void, len);
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    unsafe fn platform_lock(_ptr: *const u8, _len: usize) {}
+    #[cfg(not(any(unix, windows)))]
+    unsafe fn platform_unlock(_ptr: *const u8, _len: usize) {}
 }
 
 pub struct VaultState {
@@ -67,6 +134,15 @@ impl VaultState {
             None => Err("Vault is locked".into()),
         }
     }
+}
+
+pub fn argon2_derive_auth(password: &str, mnemonic_entropy: &[u8]) -> Result<[u8; 32], String> {
+    let mut input = Vec::with_capacity(password.len() + mnemonic_entropy.len());
+    input.extend_from_slice(password.as_bytes());
+    input.extend_from_slice(mnemonic_entropy);
+    let result = argon2_derive(&input, SALT_AUTH)?;
+    input.zeroize();
+    Ok(result)
 }
 
 pub fn derive_wrapping_key(password: &str, mnemonic_entropy: &[u8]) -> Result<[u8; 32], String> {
@@ -159,9 +235,13 @@ mod tests {
         let entry_key = mk.derive_entry_key();
         let hash_key = mk.derive_hash_key();
         let blob_key = mk.derive_blob_key();
+        let db_key = mk.derive_db_key();
         assert_ne!(entry_key, hash_key);
         assert_ne!(entry_key, blob_key);
         assert_ne!(hash_key, blob_key);
+        assert_ne!(entry_key, db_key);
+        assert_ne!(hash_key, db_key);
+        assert_ne!(blob_key, db_key);
     }
 
     #[test]

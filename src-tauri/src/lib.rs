@@ -94,7 +94,7 @@ pub fn run() {
             std::fs::create_dir_all(&db_path).ok();
 
             let db_file = db_path.join("cmdv.db");
-            let db = db::Database::open(&db_file).expect("failed to open database");
+            let db = db::Database::open_encrypted(&db_file).expect("failed to open database");
             let db = Arc::new(db);
             app.manage(db.clone());
 
@@ -129,6 +129,18 @@ pub fn run() {
             commands::vault::recover_vault,
             commands::vault::lock_vault,
             commands::vault::export_mnemonic,
+            commands::auth::get_auth_status,
+            commands::auth::register,
+            commands::auth::login,
+            commands::auth::logout,
+            commands::auth::check_subscription,
+            commands::sync::trigger_sync,
+            commands::sync::get_sync_status,
+            commands::vault::switch_to_cloud,
+            commands::vault::switch_to_local,
+            commands::vault::generate_pairing_qr,
+            commands::vault::export_database,
+            commands::vault::import_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

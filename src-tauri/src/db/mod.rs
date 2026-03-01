@@ -13,14 +13,28 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn open(path: &Path) -> Result<Self, rusqlite::Error> {
+    /// Open the database file without applying an encryption key or initializing the schema.
+    /// Call `set_encryption_key` after vault unlock to make the DB usable.
+    pub fn open_encrypted(path: &Path) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(path)?;
-        schema::initialize(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
     }
 
+    /// Apply the SQLCipher encryption key and initialize the schema.
+    /// Must be called exactly once after vault unlock.
+    pub fn set_encryption_key(&self, key: &[u8; 32]) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        let hex_key = hex::encode(key);
+        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", hex_key))
+            .map_err(|e| format!("Failed to set DB encryption key: {}", e))?;
+        schema::initialize(&conn)
+            .map_err(|e| format!("Failed to initialize schema: {}", e))?;
+        Ok(())
+    }
+
+    /// Open an unencrypted in-memory database with immediate schema init (for tests).
     pub fn open_in_memory() -> Result<Self, rusqlite::Error> {
         let conn = Connection::open_in_memory()?;
         schema::initialize(&conn)?;
