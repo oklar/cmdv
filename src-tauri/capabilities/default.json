@@ -12,6 +12,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-close",
     "core:window:allow-is-visible",
+    "core:window:allow-start-dragging",
     "core:tray:default",
     "global-shortcut:default",
     "positioner:default",
