@@ -118,7 +118,7 @@ pub fn run() {
                 let _ = window.hide();
                 api.prevent_close();
             }
-            tauri::WindowEvent::Moved { .. } => {
+            tauri::WindowEvent::Moved { .. } | tauri::WindowEvent::Resized { .. } => {
                 SUPPRESS_BLUR_HIDE.store(true, Ordering::Relaxed);
             }
             tauri::WindowEvent::Focused(false) => {
