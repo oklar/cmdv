@@ -13,6 +13,7 @@ interface AppSettings {
   excluded_apps: string[];
   sync_sensitive: boolean;
   mode: "local" | "cloud";
+  require_password_on_open: boolean;
 }
 
 export function Settings() {
@@ -158,6 +159,28 @@ export function Settings() {
               <option value={1800}>30 min</option>
               <option value={0}>Never</option>
             </select>
+          </SettingRow>
+          <SettingRow
+            label="Require password on open"
+            description="Show lock screen each time the app starts"
+          >
+            <button
+              onClick={() =>
+                saveSettings({
+                  ...settings,
+                  require_password_on_open: !settings.require_password_on_open,
+                })
+              }
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                settings.require_password_on_open ? "bg-blue-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  settings.require_password_on_open ? "translate-x-5" : ""
+                }`}
+              />
+            </button>
           </SettingRow>
         </div>
       </section>

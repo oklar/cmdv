@@ -19,11 +19,12 @@ export default function App() {
 
   useEffect(() => {
     invoke<{ setup_complete: boolean; locked: boolean }>("get_vault_status")
-      .then((status) => {
+      .then(async (status) => {
         if (!status.setup_complete) {
           setAppState("setup");
         } else if (status.locked) {
-          setAppState("locked");
+          const unlocked = await invoke<boolean>("try_auto_unlock");
+          setAppState(unlocked ? "unlocked" : "locked");
         } else {
           setAppState("unlocked");
         }

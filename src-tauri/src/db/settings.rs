@@ -14,6 +14,7 @@ pub struct AppSettings {
     pub excluded_apps: Vec<String>,
     pub sync_sensitive: bool,
     pub mode: AppMode,
+    pub require_password_on_open: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -41,6 +42,7 @@ impl Default for AppSettings {
             ],
             sync_sensitive: false,
             mode: AppMode::Local,
+            require_password_on_open: false,
         }
     }
 }
