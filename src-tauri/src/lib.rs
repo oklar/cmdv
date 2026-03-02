@@ -7,6 +7,7 @@ pub mod sensitive;
 pub mod storage;
 pub mod sync;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tauri::menu::{Menu, MenuItem};
@@ -14,6 +15,8 @@ use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_positioner::{Position, WindowExt};
+
+static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
 
 use crypto::keys::VaultState;
 
@@ -115,8 +118,23 @@ pub fn run() {
                 let _ = window.hide();
                 api.prevent_close();
             }
+            tauri::WindowEvent::Moved { .. } => {
+                SUPPRESS_BLUR_HIDE.store(true, Ordering::Relaxed);
+            }
             tauri::WindowEvent::Focused(false) => {
-                let _ = window.hide();
+                let handle = window.app_handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    if SUPPRESS_BLUR_HIDE.swap(false, Ordering::Relaxed) {
+                        return;
+                    }
+                    if let Some(w) = handle.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
+                });
+            }
+            tauri::WindowEvent::Focused(true) => {
+                SUPPRESS_BLUR_HIDE.store(false, Ordering::Relaxed);
             }
             _ => {}
         })
