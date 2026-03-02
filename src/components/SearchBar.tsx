@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 interface SearchBarProps {
   query: string;
   onQueryChange: (query: string) => void;
@@ -15,6 +17,14 @@ export function SearchBar({
   favoritesOnly,
   onFavoritesOnlyChange,
 }: SearchBarProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onFocus = () => inputRef.current?.focus();
+    window.addEventListener("focus", onFocus);
+    onFocus();
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
   return (
     <div className="px-4 py-3 border-b border-zinc-800 space-y-2">
       <div className="relative">
@@ -34,6 +44,7 @@ export function SearchBar({
           <path d="m21 21-4.3-4.3" />
         </svg>
         <input
+          ref={inputRef}
           type="text"
           placeholder="Search clipboard history..."
           value={query}
