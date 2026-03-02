@@ -160,6 +160,54 @@ pub fn unlock_vault(
     }
 }
 
+/// Auto-unlock without password if `require_password_on_open` is disabled.
+/// Returns true if the vault was unlocked, false if a password is still needed.
+#[tauri::command]
+pub fn try_auto_unlock(
+    vault: State<'_, Arc<VaultState>>,
+    settings_db: State<'_, Arc<SettingsDb>>,
+    db: State<'_, Arc<Database>>,
+) -> Result<bool, String> {
+    let setup_complete = settings_db
+        .get_value("vault_setup_complete")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+    if !setup_complete {
+        return Ok(false);
+    }
+
+    if vault.keys.lock().map_err(|_| "Lock poisoned")?.is_some() {
+        return Ok(true);
+    }
+
+    let settings = settings_db.get_settings();
+    if settings.require_password_on_open {
+        return Ok(false);
+    }
+
+    let keychain = KeychainStore::new();
+    match keychain.load_seed() {
+        Ok(seed) => {
+            let mut bytes = [0u8; 32];
+            bytes.copy_from_slice(&seed[..32]);
+            let master_key = MasterKey::from_bytes(bytes);
+
+            let app_keys = AppKeys::new(
+                master_key.derive_entry_key(),
+                master_key.derive_hash_key(),
+                master_key.derive_db_key(),
+            );
+            db.set_encryption_key(&app_keys.db_key)?;
+            *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
+
+            start_monitoring(&vault, &db, &settings_db);
+            log::info!("Vault auto-unlocked (lock screen disabled)");
+            Ok(true)
+        }
+        Err(_) => Ok(false),
+    }
+}
+
 #[tauri::command]
 pub fn recover_vault(
     password: String,
