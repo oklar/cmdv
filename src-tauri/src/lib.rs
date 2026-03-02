@@ -122,19 +122,22 @@ pub fn run() {
                 SUPPRESS_BLUR_HIDE.store(true, Ordering::Relaxed);
             }
             tauri::WindowEvent::Focused(false) => {
+                SUPPRESS_BLUR_HIDE.store(false, Ordering::Relaxed);
                 let handle = window.app_handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    if SUPPRESS_BLUR_HIDE.swap(false, Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    if SUPPRESS_BLUR_HIDE.load(Ordering::Relaxed) {
                         return;
                     }
                     if let Some(w) = handle.get_webview_window("main") {
-                        let _ = w.hide();
+                        if !w.is_focused().unwrap_or(false) {
+                            let _ = w.hide();
+                        }
                     }
                 });
             }
             tauri::WindowEvent::Focused(true) => {
-                SUPPRESS_BLUR_HIDE.store(false, Ordering::Relaxed);
+                SUPPRESS_BLUR_HIDE.store(true, Ordering::Relaxed);
             }
             _ => {}
         })
