@@ -6,7 +6,6 @@ use rand::RngCore;
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-const SALT_ENTRY_ENC: &[u8] = b"cmdv-entry-encryption";
 const SALT_HASH_KEY: &[u8] = b"cmdv-hash-key";
 const SALT_BLOB_ENC: &[u8] = b"cmdv-blob-encryption";
 const SALT_DB_ENC: &[u8] = b"cmdv-db-encryption";
@@ -31,10 +30,6 @@ impl MasterKey {
         &self.0
     }
 
-    pub fn derive_entry_key(&self) -> [u8; 32] {
-        derive_key(&self.0, SALT_ENTRY_ENC)
-    }
-
     pub fn derive_hash_key(&self) -> [u8; 32] {
         derive_key(&self.0, SALT_HASH_KEY)
     }
@@ -49,26 +44,22 @@ impl MasterKey {
 }
 
 pub struct AppKeys {
-    pub entry_key: [u8; 32],
     pub hash_key: [u8; 32],
     pub db_key: [u8; 32],
 }
 
 impl Drop for AppKeys {
     fn drop(&mut self) {
-        mlock::unlock_mem(&self.entry_key);
         mlock::unlock_mem(&self.hash_key);
         mlock::unlock_mem(&self.db_key);
-        self.entry_key.zeroize();
         self.hash_key.zeroize();
         self.db_key.zeroize();
     }
 }
 
 impl AppKeys {
-    pub fn new(entry_key: [u8; 32], hash_key: [u8; 32], db_key: [u8; 32]) -> Self {
-        let keys = Self { entry_key, hash_key, db_key };
-        mlock::lock_mem(&keys.entry_key);
+    pub fn new(hash_key: [u8; 32], db_key: [u8; 32]) -> Self {
+        let keys = Self { hash_key, db_key };
         mlock::lock_mem(&keys.hash_key);
         mlock::lock_mem(&keys.db_key);
         keys
@@ -232,14 +223,10 @@ mod tests {
     #[test]
     fn master_key_derivation_produces_distinct_keys() {
         let mk = MasterKey::generate();
-        let entry_key = mk.derive_entry_key();
         let hash_key = mk.derive_hash_key();
         let blob_key = mk.derive_blob_key();
         let db_key = mk.derive_db_key();
-        assert_ne!(entry_key, hash_key);
-        assert_ne!(entry_key, blob_key);
         assert_ne!(hash_key, blob_key);
-        assert_ne!(entry_key, db_key);
         assert_ne!(hash_key, db_key);
         assert_ne!(blob_key, db_key);
     }
@@ -249,7 +236,7 @@ mod tests {
         let bytes = [99u8; 32];
         let mk1 = MasterKey::from_bytes(bytes);
         let mk2 = MasterKey::from_bytes(bytes);
-        assert_eq!(mk1.derive_entry_key(), mk2.derive_entry_key());
+        assert_eq!(mk1.derive_hash_key(), mk2.derive_hash_key());
     }
 
     #[test]
