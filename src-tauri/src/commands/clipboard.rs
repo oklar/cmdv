@@ -1,4 +1,3 @@
-use crate::crypto;
 use crate::crypto::keys::VaultState;
 use crate::db::{Database, EntryType};
 use serde::Serialize;
@@ -24,17 +23,17 @@ pub struct StatsView {
     pub max_size_bytes: i64,
 }
 
-fn decrypt_preview(entry_key: &[u8; 32], nonce: &[u8], ciphertext: &[u8]) -> Option<String> {
-    crypto::encrypt::decrypt(entry_key, nonce, ciphertext)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-        .map(|s| {
-            if s.len() > 200 {
-                s[..200].to_string()
-            } else {
-                s
-            }
-        })
+fn make_preview(content: &[u8], content_type: &EntryType) -> Option<String> {
+    if *content_type != EntryType::Text {
+        return None;
+    }
+    String::from_utf8(content.to_vec()).ok().map(|s| {
+        if s.len() > 200 {
+            s[..200].to_string()
+        } else {
+            s
+        }
+    })
 }
 
 #[tauri::command]
@@ -46,8 +45,8 @@ pub fn get_entries(
     content_type: Option<String>,
     favorites_only: Option<bool>,
 ) -> Result<Vec<EntryView>, String> {
-    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    vault.keys.lock().map_err(|_| "Lock poisoned")?
+        .as_ref().ok_or("Vault is locked")?;
 
     let entry_type = content_type.map(|t| EntryType::from_str(&t));
     let entries = db
@@ -59,13 +58,10 @@ pub fn get_entries(
         )
         .map_err(|e| e.to_string())?;
 
-    let entry_key = keys.entry_key;
-    drop(guard);
-
     Ok(entries
         .into_iter()
         .map(|e| {
-            let preview = decrypt_preview(&entry_key, &e.nonce, &e.encrypted_payload);
+            let preview = make_preview(&e.content, &e.content_type);
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
@@ -87,20 +83,17 @@ pub fn search_entries(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<EntryView>, String> {
-    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    vault.keys.lock().map_err(|_| "Lock poisoned")?
+        .as_ref().ok_or("Vault is locked")?;
 
     let entries = db
         .search_entries(&query, limit.unwrap_or(20))
         .map_err(|e| e.to_string())?;
 
-    let entry_key = keys.entry_key;
-    drop(guard);
-
     Ok(entries
         .into_iter()
         .map(|e| {
-            let preview = decrypt_preview(&entry_key, &e.nonce, &e.encrypted_payload);
+            let preview = make_preview(&e.content, &e.content_type);
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
