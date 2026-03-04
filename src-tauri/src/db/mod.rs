@@ -139,7 +139,7 @@ impl Database {
         guard
             .as_ref()
             .unwrap()
-            .execute_batch("DELETE FROM entries_fts; DELETE FROM entries;")?;
+            .execute_batch("DELETE FROM entries;")?;
         Ok(())
     }
 }

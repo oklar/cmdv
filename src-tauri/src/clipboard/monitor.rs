@@ -1,5 +1,4 @@
 use arboard::Clipboard;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
@@ -30,16 +29,13 @@ impl ClipboardMonitor {
     pub fn poll_once(
         &mut self,
         db: &Database,
-        encryption_key: &[u8; 32],
         hash_key: &[u8; 32],
         max_entry_size: usize,
     ) -> Result<Option<String>, String> {
-        // Skip if clipboard is marked as concealed by the OS
         if sensitive::flags::is_clipboard_concealed() {
             return Ok(None);
         }
 
-        // Skip if the source app is in the exclude list
         let source_app = source::get_foreground_app();
         if let Some(ref app) = source_app {
             if source::is_excluded_with_custom(app, &self.excluded_apps) {
@@ -69,12 +65,9 @@ impl ClipboardMonitor {
             }
 
             let is_sensitive = sensitive::detect::is_sensitive(&text);
-            let (nonce, ciphertext) =
-                crypto::encrypt::encrypt(encryption_key, text.as_bytes()).map_err(|e| e.to_string())?;
 
             let entry = NewEntry {
-                encrypted_payload: ciphertext,
-                nonce,
+                content: text.as_bytes().to_vec(),
                 content_type: EntryType::Text,
                 content_hash: content_hash.clone(),
                 size_bytes: text.len() as i64,

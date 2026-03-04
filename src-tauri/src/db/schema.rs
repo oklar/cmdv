@@ -7,8 +7,7 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS entries (
             id TEXT PRIMARY KEY,
-            encrypted_payload BLOB NOT NULL,
-            nonce BLOB NOT NULL,
+            content BLOB NOT NULL,
             content_type TEXT NOT NULL DEFAULT 'text',
             content_hash BLOB NOT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -22,14 +21,7 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_entries_content_hash ON entries(content_hash);
         CREATE INDEX IF NOT EXISTS idx_entries_is_favorite ON entries(is_favorite);
         CREATE INDEX IF NOT EXISTS idx_entries_content_type ON entries(content_type);
-        CREATE INDEX IF NOT EXISTS idx_entries_is_sensitive ON entries(is_sensitive);
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
-            id,
-            plaintext_preview,
-            content='',
-            tokenize='unicode61'
-        );",
+        CREATE INDEX IF NOT EXISTS idx_entries_is_sensitive ON entries(is_sensitive);",
     )?;
 
     Ok(())

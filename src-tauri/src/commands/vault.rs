@@ -453,7 +453,6 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
 
     let guard = vault.keys.lock().unwrap();
     let keys = guard.as_ref().expect("keys must be set before monitoring");
-    let entry_key = keys.entry_key;
     let hash_key = keys.hash_key;
     drop(guard);
 
@@ -469,7 +468,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
             .with_excluded_apps(excluded_apps);
         let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
-            match monitor.poll_once(&poll_db, &entry_key, &hash_key, max_entry_size) {
+            match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
                 Ok(Some(id)) => {
                     log::info!("Captured clipboard entry: {}", id);
                     enforce_storage_limit(&poll_db, max_total_size);
@@ -503,7 +502,7 @@ pub fn export_database(
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<usize, String> {
     let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
         let keychain = crate::storage::keychain::KeychainStore::new();
         let seed = keychain.load_seed()?;
@@ -552,8 +551,7 @@ pub fn import_database(
     for entry in &merged {
         if !db.entry_exists_by_hash(&entry.content_hash).map_err(|e| e.to_string())? {
             let new_entry = crate::db::NewEntry {
-                encrypted_payload: entry.encrypted_payload.clone(),
-                nonce: entry.nonce.clone(),
+                content: entry.content.clone(),
                 content_type: crate::db::EntryType::from_str(&entry.content_type),
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,
