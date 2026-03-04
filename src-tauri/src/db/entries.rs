@@ -108,11 +108,15 @@ pub fn search_entries(
     query: &str,
     limit: usize,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
-    let pattern = format!("%{}%", query);
+    let escaped = query
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
         "SELECT id, content, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries
-         WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1
+         WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1 ESCAPE '\\'
          ORDER BY created_at DESC
          LIMIT ?2",
     )?;
@@ -344,5 +348,26 @@ mod tests {
         let results = search_entries(&conn, "quick", 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].content, b"the quick brown fox");
+    }
+
+    #[test]
+    fn search_escapes_like_wildcards() {
+        let conn = setup_db();
+        insert_entry(&conn, &NewEntry {
+            content: b"100% done".to_vec(),
+            content_hash: vec![20, 21, 22],
+            ..sample_entry()
+        }).unwrap();
+        insert_entry(&conn, &NewEntry {
+            content: b"nothing here".to_vec(),
+            content_hash: vec![30, 31, 32],
+            ..sample_entry()
+        }).unwrap();
+
+        let results = search_entries(&conn, "%", 10).unwrap();
+        assert_eq!(results.len(), 1, "literal % should not match all rows");
+
+        let results = search_entries(&conn, "_", 10).unwrap();
+        assert_eq!(results.len(), 0, "literal _ should not act as wildcard");
     }
 }
