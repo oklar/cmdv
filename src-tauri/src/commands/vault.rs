@@ -98,7 +98,6 @@ pub fn setup_vault(
     keychain.save_seed(master_key.as_bytes())?;
 
     let app_keys = AppKeys::new(
-        master_key.derive_entry_key(),
         master_key.derive_hash_key(),
         master_key.derive_db_key(),
     );
@@ -145,7 +144,6 @@ pub fn unlock_vault(
             let master_key = MasterKey::from_bytes(bytes);
 
             let app_keys = AppKeys::new(
-                master_key.derive_entry_key(),
                 master_key.derive_hash_key(),
                 master_key.derive_db_key(),
             );
@@ -193,7 +191,6 @@ pub fn try_auto_unlock(
             let master_key = MasterKey::from_bytes(bytes);
 
             let app_keys = AppKeys::new(
-                master_key.derive_entry_key(),
                 master_key.derive_hash_key(),
                 master_key.derive_db_key(),
             );
@@ -252,7 +249,6 @@ pub fn recover_vault(
     keychain.save_seed(master_key.as_bytes())?;
 
     let app_keys = AppKeys::new(
-        master_key.derive_entry_key(),
         master_key.derive_hash_key(),
         master_key.derive_db_key(),
     );
