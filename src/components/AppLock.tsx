@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { sendNotification } from "@tauri-apps/plugin-notification";
 
 interface AppLockProps {
   onUnlock: () => void;
+}
+
+async function hideAndNotify() {
+  try {
+    sendNotification({
+      title: "CMDV",
+      body: "Vault is locked. Click the tray icon to unlock.",
+    });
+  } catch (e) {
+    console.error("Notification failed:", e);
+  }
+  await invoke("hide_to_tray");
 }
 
 export function AppLock({ onUnlock }: AppLockProps) {
@@ -66,7 +79,7 @@ export function AppLock({ onUnlock }: AppLockProps) {
       <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
         <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
         <button
-          onClick={() => invoke("hide_to_tray")}
+          onClick={() => hideAndNotify()}
           className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
           title="Hide to tray"
         >

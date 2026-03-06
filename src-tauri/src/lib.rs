@@ -46,14 +46,15 @@ fn show_window(app: &tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn hide_to_tray(app: tauri::AppHandle, vault: tauri::State<'_, Arc<VaultState>>) -> Result<(), String> {
+fn hide_to_tray(
+    app: tauri::AppHandle,
+    vault: tauri::State<'_, Arc<VaultState>>,
+) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
 
-    let unlocked = vault.keys.lock()
-        .map(|g| g.is_some())
-        .unwrap_or(false);
+    let unlocked = vault.keys.lock().map(|g| g.is_some()).unwrap_or(false);
 
     if !unlocked {
         if let Some(tray) = app.tray_by_id("main") {
@@ -67,6 +68,7 @@ fn hide_to_tray(app: tauri::AppHandle, vault: tauri::State<'_, Arc<VaultState>>)
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -103,7 +105,11 @@ pub fn run() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        ..
+                    } = event
+                    {
                         show_window(tray.app_handle());
                     }
                 })

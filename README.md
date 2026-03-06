@@ -1,73 +1,104 @@
-# React + TypeScript + Vite
+# CMDV
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Zero-knowledge encrypted clipboard manager built with Tauri v2 (Rust + React + TypeScript).
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Tool | Version | Install |
+|------|---------|---------|
+| **Node.js** | >= 20 | https://nodejs.org/ |
+| **Rust** | >= 1.77.2 | https://rustup.rs/ |
+| **Tauri CLI** | v2 | Included as dev dependency |
 
-## React Compiler
+### Windows-specific
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The Rust backend compiles **OpenSSL from source** (required by SQLCipher and the notification plugin). This needs a full Perl distribution — Git Bash's bundled Perl is missing modules and will fail.
 
-## Expanding the ESLint configuration
+1. Install [Strawberry Perl](https://strawberryperl.com/) (free, ~200 MB).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+2. Git Bash (used by Cursor/VS Code terminals) automatically prepends its own Perl (`C:\Program Files\Git\usr\bin\perl.exe`) to PATH at startup, which shadows Strawberry Perl. To fix this, add the following line to `~/.bashrc` (i.e. `C:\Users\<you>\.bashrc`):
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+   ```bash
+   export PATH="/c/Strawberry/perl/bin:$PATH"
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+3. Restart your terminal after saving.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Verify the correct Perl is active:
+
+```bash
+which perl
+# Should show: /c/Strawberry/perl/bin/perl
+
+perl -v
+# Should show "MSWin32" in the build string, NOT "msys"
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### macOS-specific
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Xcode Command Line Tools are required:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+xcode-select --install
+```
+
+### Linux-specific
+
+Install system dependencies:
+
+```
+sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+```
+
+## Getting started
+
+```bash
+# Clone and install
+git clone https://github.com/your-org/cmdv3.git
+cd cmdv3
+npm install
+
+# Run in development mode
+npm run tauri dev
+
+# Build for production
+npm run tauri build
+```
+
+## Project structure
+
+```
+cmdv3/
+├── src/                    # React frontend (TypeScript)
+│   ├── components/         # UI components
+│   └── App.tsx             # Root component
+├── src-tauri/              # Rust backend
+│   ├── src/
+│   │   ├── clipboard/      # Clipboard monitoring
+│   │   ├── commands/       # Tauri IPC commands
+│   │   ├── crypto/         # Encryption, key derivation, BIP39
+│   │   ├── db/             # SQLCipher database
+│   │   ├── sensitive/      # Sensitive content detection
+│   │   ├── storage/        # OS keychain integration
+│   │   ├── sync/           # Cloud sync (Cloudflare R2)
+│   │   └── lib.rs          # App setup, tray, window management
+│   ├── capabilities/       # Tauri permissions
+│   └── Cargo.toml          # Rust dependencies
+├── package.json            # Node dependencies
+└── tauri.conf.json         # Tauri app config
+```
+
+## Troubleshooting
+
+### `openssl-sys` build failure on Windows
+
+```
+error: failed to run custom build command for `openssl-sys`
+'perl' reported failure with exit code: 2
+```
+
+This means Git Bash's Perl is being used instead of Strawberry Perl. Fix your PATH so `C:\Strawberry\perl\bin` comes first (see [Windows-specific](#windows-specific) above).
+
+### `Blocking waiting for file lock on artifact directory`
+
+Another Cargo process is holding the build lock. Check Task Manager for stale `cargo.exe` or `rustc.exe` processes and end them.

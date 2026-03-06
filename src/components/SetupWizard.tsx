@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { sendNotification } from "@tauri-apps/plugin-notification";
 import { MnemonicDisplay } from "./MnemonicDisplay";
 
 interface SetupWizardProps {
@@ -7,6 +8,18 @@ interface SetupWizardProps {
 }
 
 type Step = "welcome" | "password" | "mnemonic";
+
+async function hideAndNotify() {
+  try {
+    sendNotification({
+      title: "CMDV",
+      body: "Setup is incomplete. Click the tray icon to continue.",
+    });
+  } catch (e) {
+    console.error("Notification failed:", e);
+  }
+  await invoke("hide_to_tray");
+}
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [step, setStep] = useState<Step>("welcome");
@@ -47,7 +60,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
           <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
           <button
-            onClick={() => invoke("hide_to_tray")}
+            onClick={() => hideAndNotify()}
             className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
             title="Hide to tray"
           >
@@ -69,7 +82,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
         <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
         <button
-          onClick={() => invoke("hide_to_tray")}
+          onClick={() => hideAndNotify()}
           className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
           title="Hide to tray"
         >

@@ -17,6 +17,7 @@
     "global-shortcut:default",
     "positioner:default",
     "dialog:default",
-    "process:default"
+    "process:default",
+    "notification:default"
   ]
 }
