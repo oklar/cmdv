@@ -59,6 +59,14 @@ fn hide_to_tray(app: tauri::AppHandle, vault: tauri::State<'_, Arc<VaultState>>)
         if let Some(tray) = app.tray_by_id("main") {
             let _ = tray.set_tooltip(Some("CMDV — Setup incomplete. Click to continue."));
         }
+
+        let _ = notify_rust::Notification::new()
+            .summary("Setup incomplete")
+            .appname("CMDV")
+            .body("Setup is incomplete. Click the tray icon to continue.")
+            .auto_icon()
+            .timeout(10000)
+            .show();
     }
 
     Ok(())
