@@ -2,6 +2,7 @@ use arboard::Clipboard;
 
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
+use crate::image as img;
 use crate::sensitive;
 
 use super::source;
@@ -82,6 +83,49 @@ impl ClipboardMonitor {
             return Ok(Some(id));
         }
 
+        if let Ok(image_data) = clipboard.get_image() {
+            let rgba = &image_data.bytes;
+            if rgba.is_empty() {
+                return Ok(None);
+            }
+
+            let content_hash = crypto::hash::keyed_hash(hash_key, rgba);
+
+            if self.last_image_hash.as_deref() == Some(&content_hash) {
+                return Ok(None);
+            }
+
+            if db.entry_exists_by_hash(&content_hash).map_err(|e| e.to_string())? {
+                self.last_image_hash = Some(content_hash);
+                return Ok(None);
+            }
+
+            let (width, height) = (image_data.width as u32, image_data.height as u32);
+            let png_buf = encode_rgba_to_png(rgba, width, height)?;
+
+            let webp_bytes = img::convert_to_webp(&png_buf, 80.0)
+                .unwrap_or(png_buf.clone());
+
+            if webp_bytes.len() > max_entry_size {
+                return Ok(None);
+            }
+
+            let entry = NewEntry {
+                content: webp_bytes.clone(),
+                content_type: EntryType::Image,
+                content_hash: content_hash.clone(),
+                size_bytes: webp_bytes.len() as i64,
+                is_favorite: false,
+                is_sensitive: false,
+                source_app,
+            };
+
+            let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
+            self.last_image_hash = Some(content_hash);
+
+            return Ok(Some(id));
+        }
+
         Ok(None)
     }
 }
@@ -90,4 +134,20 @@ impl Default for ClipboardMonitor {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn encode_rgba_to_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
+    {
+        let encoder = image::codecs::png::PngEncoder::new(&mut buf);
+        image::ImageEncoder::write_image(
+            encoder,
+            rgba,
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+        )
+        .map_err(|e| format!("PNG encode failed: {e}"))?;
+    }
+    Ok(buf)
 }

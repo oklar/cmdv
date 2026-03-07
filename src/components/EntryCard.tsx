@@ -48,7 +48,8 @@ export function EntryCard({
   };
 
   const displayContent = () => {
-    if (!preview) return "[Encrypted]";
+    if (!preview) return "[No preview]";
+    if (contentType === "image") return null;
     if (isSensitive && !revealed) return "••••••••••••";
     return preview;
   };
@@ -57,9 +58,17 @@ export function EntryCard({
     <div className="group px-4 py-3 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200 truncate font-mono">
-            {displayContent()}
-          </p>
+          {contentType === "image" && preview ? (
+            <img
+              src={preview}
+              alt="Clipboard image"
+              className="max-h-24 rounded border border-zinc-700 object-contain"
+            />
+          ) : (
+            <p className="text-sm text-zinc-200 truncate font-mono">
+              {displayContent()}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-1.5">
             <span className="text-xs text-zinc-500">{formatTime(createdAt)}</span>
             <span className="text-xs text-zinc-600">·</span>
