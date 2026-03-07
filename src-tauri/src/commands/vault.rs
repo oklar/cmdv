@@ -362,6 +362,8 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     }
 
     lines.push(String::new());
+    lines.push("Vault Password: ________________________________________".into());
+    lines.push(String::new());
     lines.push("WARNING: Anyone with these words and your password can".into());
     lines.push("decrypt your clipboard data. Delete this file after".into());
     lines.push("storing the phrase securely.".into());
@@ -383,10 +385,17 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
         }
         let size = if i == 0 { title_size } else { font_size };
         let escaped = line.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)");
-        text_ops.push_str(&format!(
-            "/F1 {} Tf {} {} Td ({}) Tj\n",
-            size, margin, y, escaped
-        ));
+        if i == 0 {
+            text_ops.push_str(&format!(
+                "/F1 {} Tf {} {} Td ({}) Tj\n",
+                size, margin, y, escaped
+            ));
+        } else {
+            text_ops.push_str(&format!(
+                "/F1 {} Tf 0 -{} Td ({}) Tj\n",
+                size, leading, escaped
+            ));
+        }
     }
     text_ops.push_str("ET\n");
 
