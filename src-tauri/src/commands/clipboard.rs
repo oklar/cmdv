@@ -24,16 +24,20 @@ pub struct StatsView {
 }
 
 fn make_preview(content: &[u8], content_type: &EntryType) -> Option<String> {
-    if *content_type != EntryType::Text {
-        return None;
-    }
-    String::from_utf8(content.to_vec()).ok().map(|s| {
-        if s.len() > 200 {
-            s[..200].to_string()
-        } else {
-            s
+    match content_type {
+        EntryType::Text => String::from_utf8(content.to_vec()).ok().map(|s| {
+            if s.len() > 200 {
+                s[..200].to_string()
+            } else {
+                s
+            }
+        }),
+        EntryType::Image => {
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(content);
+            Some(format!("data:image/webp;base64,{}", b64))
         }
-    })
+    }
 }
 
 #[tauri::command]
