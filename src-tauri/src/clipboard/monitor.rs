@@ -101,10 +101,8 @@ impl ClipboardMonitor {
             }
 
             let (width, height) = (image_data.width as u32, image_data.height as u32);
-            let png_buf = encode_rgba_to_png(rgba, width, height)?;
 
-            let webp_bytes = img::convert_to_webp(&png_buf, 80.0)
-                .unwrap_or(png_buf.clone());
+            let webp_bytes = img::rgba_to_webp(rgba, width, height, 80.0)?;
 
             if webp_bytes.len() > max_entry_size {
                 return Ok(None);
@@ -134,20 +132,4 @@ impl Default for ClipboardMonitor {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn encode_rgba_to_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
-    let mut buf = Vec::new();
-    {
-        let encoder = image::codecs::png::PngEncoder::new(&mut buf);
-        image::ImageEncoder::write_image(
-            encoder,
-            rgba,
-            width,
-            height,
-            image::ExtendedColorType::Rgba8,
-        )
-        .map_err(|e| format!("PNG encode failed: {e}"))?;
-    }
-    Ok(buf)
 }
