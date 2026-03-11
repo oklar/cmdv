@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { EntryCard } from "./EntryCard";
 
@@ -26,6 +26,8 @@ export function ClipboardList({
 }: ClipboardListProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const entryRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -56,6 +58,35 @@ export function ClipboardList({
     const interval = setInterval(fetchEntries, 2000);
     return () => clearInterval(interval);
   }, [fetchEntries]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery, filterType, favoritesOnly]);
+
+  useEffect(() => {
+    entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (entries.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, entries.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const entry = entries[selectedIndex];
+        if (entry) handleCopyBack(entry.id);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [entries, selectedIndex]);
 
   const handleToggleFavorite = async (id: string) => {
     try {
@@ -120,9 +151,10 @@ export function ClipboardList({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {entries.map((entry) => (
+      {entries.map((entry, index) => (
         <EntryCard
           key={entry.id}
+          ref={(el) => { entryRefs.current[index] = el; }}
           id={entry.id}
           contentType={entry.content_type}
           lastUsedAt={entry.last_used_at}
@@ -131,6 +163,7 @@ export function ClipboardList({
           sizeBytes={entry.size_bytes}
           sourceApp={entry.source_app}
           preview={entry.preview}
+          isSelected={index === selectedIndex}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
           onCopyBack={handleCopyBack}
