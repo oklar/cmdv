@@ -69,6 +69,12 @@ export function ClipboardList({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        invoke("hide_to_tray");
+        return;
+      }
+
       if (entries.length === 0) return;
 
       if (e.key === "ArrowDown") {
