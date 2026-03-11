@@ -5,7 +5,7 @@ import { EntryCard } from "./EntryCard";
 interface Entry {
   id: string;
   content_type: string;
-  created_at: string;
+  last_used_at: string;
   is_favorite: boolean;
   is_sensitive: boolean;
   size_bytes: number;
@@ -75,6 +75,11 @@ export function ClipboardList({
     }
   };
 
+  const handleCopyBack = async (id: string) => {
+    await invoke("copy_entry_to_clipboard", { id });
+    await invoke("hide_to_tray");
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -120,7 +125,7 @@ export function ClipboardList({
           key={entry.id}
           id={entry.id}
           contentType={entry.content_type}
-          createdAt={entry.created_at}
+          lastUsedAt={entry.last_used_at}
           isFavorite={entry.is_favorite}
           isSensitive={entry.is_sensitive}
           sizeBytes={entry.size_bytes}
@@ -128,6 +133,7 @@ export function ClipboardList({
           preview={entry.preview}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
+          onCopyBack={handleCopyBack}
         />
       ))}
     </div>

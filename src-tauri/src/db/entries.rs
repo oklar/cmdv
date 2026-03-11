@@ -31,7 +31,7 @@ pub struct ClipboardEntry {
     pub content: Vec<u8>,
     pub content_type: EntryType,
     pub content_hash: Vec<u8>,
-    pub created_at: String,
+    pub last_used_at: String,
     pub is_favorite: bool,
     pub is_sensitive: bool,
     pub size_bytes: i64,
@@ -69,7 +69,7 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
 
 pub fn get_entry(conn: &Connection, id: &str) -> Result<Option<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id], row_to_entry)?;
@@ -84,7 +84,7 @@ pub fn get_entries(
     favorites_only: bool,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut sql = String::from(
-        "SELECT id, content, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries WHERE 1=1",
     );
 
@@ -94,7 +94,7 @@ pub fn get_entries(
     if favorites_only {
         sql.push_str(" AND is_favorite = 1");
     }
-    sql.push_str(" ORDER BY created_at DESC LIMIT ?1 OFFSET ?2");
+    sql.push_str(" ORDER BY last_used_at DESC LIMIT ?1 OFFSET ?2");
 
     let mut stmt = conn.prepare(&sql)?;
     let entries = stmt
@@ -114,10 +114,10 @@ pub fn search_entries(
         .replace('_', "\\_");
     let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries
          WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1 ESCAPE '\\'
-         ORDER BY created_at DESC
+         ORDER BY last_used_at DESC
          LIMIT ?2",
     )?;
     let entries = stmt
@@ -172,7 +172,7 @@ pub fn prune_oldest_non_favorites(
     let mut stmt = conn.prepare(
         "SELECT id, size_bytes FROM entries
          WHERE is_favorite = 0
-         ORDER BY created_at ASC",
+         ORDER BY last_used_at ASC",
     )?;
     let candidates: Vec<(String, i64)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -199,16 +199,24 @@ pub fn delete_expired_sensitive(
 ) -> Result<usize, rusqlite::Error> {
     let deleted = conn.execute(
         "DELETE FROM entries WHERE is_sensitive = 1 AND is_favorite = 0
-         AND datetime(created_at, '+' || ?1 || ' seconds') < datetime('now')",
+         AND datetime(last_used_at, '+' || ?1 || ' seconds') < datetime('now')",
         params![max_age_secs],
     )?;
     Ok(deleted)
 }
 
+pub fn touch_entry(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE entries SET last_used_at = datetime('now') WHERE id = ?1",
+        params![id],
+    )?;
+    Ok(())
+}
+
 pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
-         FROM entries ORDER BY created_at ASC",
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
+         FROM entries ORDER BY last_used_at ASC",
     )?;
     let entries = stmt
         .query_map([], row_to_entry)?
@@ -223,7 +231,7 @@ fn row_to_entry(row: &rusqlite::Row) -> Result<ClipboardEntry, rusqlite::Error> 
         content: row.get(1)?,
         content_type: EntryType::from_str(&content_type_str),
         content_hash: row.get(3)?,
-        created_at: row.get(4)?,
+        last_used_at: row.get(4)?,
         is_favorite: row.get::<_, i32>(5)? != 0,
         is_sensitive: row.get::<_, i32>(6)? != 0,
         size_bytes: row.get(7)?,

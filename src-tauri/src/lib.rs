@@ -187,6 +187,7 @@ pub fn run() {
             commands::clipboard::delete_entry,
             commands::clipboard::clear_all_entries,
             commands::clipboard::get_stats,
+            commands::clipboard::copy_entry_to_clipboard,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::vault::get_vault_status,

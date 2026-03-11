@@ -8,7 +8,7 @@ use tauri::State;
 pub struct EntryView {
     pub id: String,
     pub content_type: String,
-    pub created_at: String,
+    pub last_used_at: String,
     pub is_favorite: bool,
     pub is_sensitive: bool,
     pub size_bytes: i64,
@@ -69,7 +69,7 @@ pub fn get_entries(
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
-                created_at: e.created_at,
+                last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 is_sensitive: e.is_sensitive,
                 size_bytes: e.size_bytes,
@@ -101,7 +101,7 @@ pub fn search_entries(
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
-                created_at: e.created_at,
+                last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 is_sensitive: e.is_sensitive,
                 size_bytes: e.size_bytes,
@@ -136,4 +136,46 @@ pub fn get_stats(db: State<'_, Arc<Database>>) -> Result<StatsView, String> {
         total_size_bytes,
         max_size_bytes: 50 * 1024 * 1024,
     })
+}
+
+#[tauri::command]
+pub fn copy_entry_to_clipboard(
+    id: String,
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+) -> Result<(), String> {
+    vault
+        .keys
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .as_ref()
+        .ok_or("Vault is locked")?;
+
+    let entry = db
+        .get_entry(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Entry not found")?;
+
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+
+    match entry.content_type {
+        EntryType::Text => {
+            let text = String::from_utf8(entry.content).map_err(|e| e.to_string())?;
+            clipboard.set_text(text).map_err(|e| e.to_string())?;
+        }
+        EntryType::Image => {
+            let (rgba, width, height) =
+                crate::image::decode_to_rgba(&entry.content).map_err(|e| e.to_string())?;
+            let img_data = arboard::ImageData {
+                width: width as usize,
+                height: height as usize,
+                bytes: std::borrow::Cow::Owned(rgba),
+            };
+            clipboard.set_image(img_data).map_err(|e| e.to_string())?;
+        }
+    }
+
+    db.touch_entry(&id).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
