@@ -1,5 +1,17 @@
-use image::io::Reader as ImageReader;
+use image::ImageReader;
 use std::io::Cursor;
+
+pub fn decode_to_rgba(image_data: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
+    let img = ImageReader::new(Cursor::new(image_data))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?
+        .decode()
+        .map_err(|e| e.to_string())?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok((rgba.into_raw(), width, height))
+}
 
 pub fn convert_to_webp(image_data: &[u8], quality: f32) -> Result<Vec<u8>, String> {
     let img = ImageReader::new(Cursor::new(image_data))

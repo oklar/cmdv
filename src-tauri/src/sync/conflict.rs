@@ -20,7 +20,7 @@ pub fn merge_entries(
                 if entry.is_favorite && !existing.is_favorite {
                     *existing = sync_entry.clone();
                 }
-                if entry.created_at > existing.created_at {
+                if entry.last_used_at > existing.last_used_at {
                     let was_fav = existing.is_favorite;
                     *existing = sync_entry.clone();
                     if was_fav {
@@ -32,6 +32,6 @@ pub fn merge_entries(
     }
 
     let mut result: Vec<SyncEntry> = merged.into_values().collect();
-    result.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    result.sort_by(|a, b| a.last_used_at.cmp(&b.last_used_at));
     result
 }

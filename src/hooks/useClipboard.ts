@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 interface Entry {
   id: string;
   content_type: string;
-  created_at: string;
+  last_used_at: string;
   is_favorite: boolean;
   is_sensitive: boolean;
   size_bytes: number;
