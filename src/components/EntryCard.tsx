@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 
 interface EntryCardProps {
   id: string;
@@ -9,12 +9,13 @@ interface EntryCardProps {
   sizeBytes: number;
   sourceApp: string | null;
   preview: string | null;
+  isSelected: boolean;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onCopyBack: (id: string) => Promise<void>;
 }
 
-export function EntryCard({
+export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function EntryCard({
   id,
   contentType,
   lastUsedAt,
@@ -23,10 +24,11 @@ export function EntryCard({
   sizeBytes,
   sourceApp,
   preview,
+  isSelected,
   onToggleFavorite,
   onDelete,
   onCopyBack,
-}: EntryCardProps) {
+}, ref) {
   const [revealed, setRevealed] = useState(false);
 
   const formatTime = (iso: string) => {
@@ -57,7 +59,12 @@ export function EntryCard({
   };
 
   return (
-    <div className="group px-4 py-3 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+    <div
+      ref={ref}
+      className={`group px-4 py-3 border-b border-zinc-800/50 transition-colors ${
+        isSelected ? "bg-zinc-800/70 ring-1 ring-zinc-600" : "hover:bg-zinc-900/50"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           {contentType === "image" && preview ? (
@@ -96,7 +103,9 @@ export function EntryCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className={`flex items-center gap-1 transition-opacity ${
+          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}>
           <button
             onClick={() => onCopyBack(id)}
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -199,4 +208,4 @@ export function EntryCard({
       </div>
     </div>
   );
-}
+});
