@@ -10,6 +10,7 @@ interface EntryCardProps {
   sourceApp: string | null;
   preview: string | null;
   isSelected: boolean;
+  shortcutKey: string | null;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onCopyBack: (id: string) => Promise<void>;
@@ -25,6 +26,7 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   sourceApp,
   preview,
   isSelected,
+  shortcutKey,
   onToggleFavorite,
   onDelete,
   onCopyBack,
@@ -66,6 +68,11 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
       }`}
     >
       <div className="flex items-start justify-between gap-3">
+        {shortcutKey !== null && (
+          <span className="shrink-0 w-4 h-4 rounded-sm bg-zinc-800/80 text-zinc-500 text-[10px] font-medium flex items-center justify-center mt-0.5">
+            {shortcutKey}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
           {contentType === "image" && preview ? (
             <img

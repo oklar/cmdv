@@ -88,11 +88,23 @@ export function ClipboardList({
         const entry = entries[selectedIndex];
         if (entry) handleCopyBack(entry.id);
       }
+
+      if (!searchQuery && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const digit = parseInt(e.key, 10);
+        if (!isNaN(digit)) {
+          const index = digit === 0 ? 9 : digit - 1;
+          const entry = entries[index];
+          if (entry) {
+            e.preventDefault();
+            handleCopyBack(entry.id);
+          }
+        }
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [entries, selectedIndex]);
+  }, [entries, selectedIndex, searchQuery]);
 
   const handleToggleFavorite = async (id: string) => {
     try {
@@ -155,6 +167,13 @@ export function ClipboardList({
     );
   }
 
+  const shortcutKeyForIndex = (index: number): string | null => {
+    if (searchQuery) return null;
+    if (index < 9) return String(index + 1);
+    if (index === 9) return "0";
+    return null;
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       {entries.map((entry, index) => (
@@ -170,6 +189,7 @@ export function ClipboardList({
           sourceApp={entry.source_app}
           preview={entry.preview}
           isSelected={index === selectedIndex}
+          shortcutKey={shortcutKeyForIndex(index)}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
           onCopyBack={handleCopyBack}
