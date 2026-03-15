@@ -4,7 +4,6 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { ClipboardList } from "./components/ClipboardList";
 import { SearchBar } from "./components/SearchBar";
-import { SyncStatus } from "./components/SyncStatus";
 import { Settings } from "./components/Settings";
 import { SetupWizard } from "./components/SetupWizard";
 import { AppLock } from "./components/AppLock";
@@ -69,7 +68,6 @@ export default function App() {
       >
         <h1 className="text-lg font-semibold tracking-tight select-none pointer-events-none">CMDV</h1>
         <div className="flex items-center gap-1">
-          <SyncStatus />
           <button
             onClick={() => setView(view === "settings" ? "clipboard" : "settings")}
             className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
