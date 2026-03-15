@@ -129,6 +129,11 @@ impl Database {
         entries::delete_expired_sensitive(guard.as_ref().unwrap(), max_age_secs)
     }
 
+    pub fn touch_entry(&self, id: &str) -> Result<(), rusqlite::Error> {
+        let guard = self.conn()?;
+        entries::touch_entry(guard.as_ref().unwrap(), id)
+    }
+
     pub fn get_all_entries(&self) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
         let guard = self.conn()?;
         entries::get_all_entries(guard.as_ref().unwrap())
@@ -139,7 +144,7 @@ impl Database {
         guard
             .as_ref()
             .unwrap()
-            .execute_batch("DELETE FROM entries_fts; DELETE FROM entries;")?;
+            .execute_batch("DELETE FROM entries;")?;
         Ok(())
     }
 }

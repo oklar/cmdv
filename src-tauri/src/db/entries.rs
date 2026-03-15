@@ -28,11 +28,10 @@ impl EntryType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardEntry {
     pub id: String,
-    pub encrypted_payload: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub content: Vec<u8>,
     pub content_type: EntryType,
     pub content_hash: Vec<u8>,
-    pub created_at: String,
+    pub last_used_at: String,
     pub is_favorite: bool,
     pub is_sensitive: bool,
     pub size_bytes: i64,
@@ -40,8 +39,7 @@ pub struct ClipboardEntry {
 }
 
 pub struct NewEntry {
-    pub encrypted_payload: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub content: Vec<u8>,
     pub content_type: EntryType,
     pub content_hash: Vec<u8>,
     pub size_bytes: i64,
@@ -53,12 +51,11 @@ pub struct NewEntry {
 pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusqlite::Error> {
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO entries (id, encrypted_payload, nonce, content_type, content_hash, is_favorite, is_sensitive, size_bytes, source_app)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO entries (id, content, content_type, content_hash, is_favorite, is_sensitive, size_bytes, source_app)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             id,
-            entry.encrypted_payload,
-            entry.nonce,
+            entry.content,
             entry.content_type.as_str(),
             entry.content_hash,
             entry.is_favorite as i32,
@@ -72,7 +69,7 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
 
 pub fn get_entry(conn: &Connection, id: &str) -> Result<Option<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, encrypted_payload, nonce, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id], row_to_entry)?;
@@ -87,7 +84,7 @@ pub fn get_entries(
     favorites_only: bool,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut sql = String::from(
-        "SELECT id, encrypted_payload, nonce, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
          FROM entries WHERE 1=1",
     );
 
@@ -97,7 +94,7 @@ pub fn get_entries(
     if favorites_only {
         sql.push_str(" AND is_favorite = 1");
     }
-    sql.push_str(" ORDER BY created_at DESC LIMIT ?1 OFFSET ?2");
+    sql.push_str(" ORDER BY last_used_at DESC LIMIT ?1 OFFSET ?2");
 
     let mut stmt = conn.prepare(&sql)?;
     let entries = stmt
@@ -111,16 +108,20 @@ pub fn search_entries(
     query: &str,
     limit: usize,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
+    let escaped = query
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
-        "SELECT e.id, e.encrypted_payload, e.nonce, e.content_type, e.content_hash, e.created_at, e.is_favorite, e.is_sensitive, e.size_bytes, e.source_app
-         FROM entries_fts f
-         JOIN entries e ON f.id = e.id
-         WHERE entries_fts MATCH ?1
-         ORDER BY rank
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
+         FROM entries
+         WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1 ESCAPE '\\'
+         ORDER BY last_used_at DESC
          LIMIT ?2",
     )?;
     let entries = stmt
-        .query_map(params![query, limit as i64], row_to_entry)?
+        .query_map(params![pattern, limit as i64], row_to_entry)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(entries)
 }
@@ -139,7 +140,6 @@ pub fn toggle_favorite(conn: &Connection, id: &str) -> Result<bool, rusqlite::Er
 }
 
 pub fn delete_entry(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
-    conn.execute("DELETE FROM entries_fts WHERE id = ?1", params![id])?;
     conn.execute("DELETE FROM entries WHERE id = ?1", params![id])?;
     Ok(())
 }
@@ -172,7 +172,7 @@ pub fn prune_oldest_non_favorites(
     let mut stmt = conn.prepare(
         "SELECT id, size_bytes FROM entries
          WHERE is_favorite = 0
-         ORDER BY created_at ASC",
+         ORDER BY last_used_at ASC",
     )?;
     let candidates: Vec<(String, i64)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -199,16 +199,24 @@ pub fn delete_expired_sensitive(
 ) -> Result<usize, rusqlite::Error> {
     let deleted = conn.execute(
         "DELETE FROM entries WHERE is_sensitive = 1 AND is_favorite = 0
-         AND datetime(created_at, '+' || ?1 || ' seconds') < datetime('now')",
+         AND datetime(last_used_at, '+' || ?1 || ' seconds') < datetime('now')",
         params![max_age_secs],
     )?;
     Ok(deleted)
 }
 
+pub fn touch_entry(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE entries SET last_used_at = datetime('now') WHERE id = ?1",
+        params![id],
+    )?;
+    Ok(())
+}
+
 pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, encrypted_payload, nonce, content_type, content_hash, created_at, is_favorite, is_sensitive, size_bytes, source_app
-         FROM entries ORDER BY created_at ASC",
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, is_sensitive, size_bytes, source_app
+         FROM entries ORDER BY last_used_at ASC",
     )?;
     let entries = stmt
         .query_map([], row_to_entry)?
@@ -217,18 +225,17 @@ pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlit
 }
 
 fn row_to_entry(row: &rusqlite::Row) -> Result<ClipboardEntry, rusqlite::Error> {
-    let content_type_str: String = row.get(3)?;
+    let content_type_str: String = row.get(2)?;
     Ok(ClipboardEntry {
         id: row.get(0)?,
-        encrypted_payload: row.get(1)?,
-        nonce: row.get(2)?,
+        content: row.get(1)?,
         content_type: EntryType::from_str(&content_type_str),
-        content_hash: row.get(4)?,
-        created_at: row.get(5)?,
-        is_favorite: row.get::<_, i32>(6)? != 0,
-        is_sensitive: row.get::<_, i32>(7)? != 0,
-        size_bytes: row.get(8)?,
-        source_app: row.get(9)?,
+        content_hash: row.get(3)?,
+        last_used_at: row.get(4)?,
+        is_favorite: row.get::<_, i32>(5)? != 0,
+        is_sensitive: row.get::<_, i32>(6)? != 0,
+        size_bytes: row.get(7)?,
+        source_app: row.get(8)?,
     })
 }
 
@@ -245,8 +252,7 @@ mod tests {
 
     fn sample_entry() -> NewEntry {
         NewEntry {
-            encrypted_payload: vec![1, 2, 3],
-            nonce: vec![4, 5, 6],
+            content: b"hello world".to_vec(),
             content_type: EntryType::Text,
             content_hash: vec![7, 8, 9],
             size_bytes: 100,
@@ -262,7 +268,7 @@ mod tests {
         let entry = sample_entry();
         let id = insert_entry(&conn, &entry).unwrap();
         let retrieved = get_entry(&conn, &id).unwrap().unwrap();
-        assert_eq!(retrieved.encrypted_payload, entry.encrypted_payload);
+        assert_eq!(retrieved.content, entry.content);
         assert_eq!(retrieved.size_bytes, 100);
     }
 
@@ -323,7 +329,6 @@ mod tests {
         fav.size_bytes = 500;
         insert_entry(&conn, &fav).unwrap();
 
-        let normal = sample_entry();
         insert_entry(&conn, &NewEntry {
             content_hash: vec![10, 11, 12],
             ..sample_entry()
@@ -332,5 +337,45 @@ mod tests {
         let pruned = prune_oldest_non_favorites(&conn, 200).unwrap();
         assert_eq!(pruned, 1);
         assert_eq!(get_entry_count(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn search_finds_matching_text() {
+        let conn = setup_db();
+        insert_entry(&conn, &NewEntry {
+            content: b"the quick brown fox".to_vec(),
+            content_hash: vec![1, 2, 3],
+            ..sample_entry()
+        }).unwrap();
+        insert_entry(&conn, &NewEntry {
+            content: b"lazy dog".to_vec(),
+            content_hash: vec![4, 5, 6],
+            ..sample_entry()
+        }).unwrap();
+
+        let results = search_entries(&conn, "quick", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].content, b"the quick brown fox");
+    }
+
+    #[test]
+    fn search_escapes_like_wildcards() {
+        let conn = setup_db();
+        insert_entry(&conn, &NewEntry {
+            content: b"100% done".to_vec(),
+            content_hash: vec![20, 21, 22],
+            ..sample_entry()
+        }).unwrap();
+        insert_entry(&conn, &NewEntry {
+            content: b"nothing here".to_vec(),
+            content_hash: vec![30, 31, 32],
+            ..sample_entry()
+        }).unwrap();
+
+        let results = search_entries(&conn, "%", 10).unwrap();
+        assert_eq!(results.len(), 1, "literal % should not match all rows");
+
+        let results = search_entries(&conn, "_", 10).unwrap();
+        assert_eq!(results.len(), 0, "literal _ should not act as wildcard");
     }
 }

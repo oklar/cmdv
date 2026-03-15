@@ -11,11 +11,10 @@ pub struct SyncBlob {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SyncEntry {
     pub id: String,
-    pub encrypted_payload: Vec<u8>,
-    pub nonce: Vec<u8>,
+    pub content: Vec<u8>,
     pub content_type: String,
     pub content_hash: Vec<u8>,
-    pub created_at: String,
+    pub last_used_at: String,
     pub is_favorite: bool,
     pub is_sensitive: bool,
     pub size_bytes: i64,
@@ -25,11 +24,10 @@ impl From<&ClipboardEntry> for SyncEntry {
     fn from(e: &ClipboardEntry) -> Self {
         Self {
             id: e.id.clone(),
-            encrypted_payload: e.encrypted_payload.clone(),
-            nonce: e.nonce.clone(),
+            content: e.content.clone(),
             content_type: e.content_type.as_str().to_string(),
             content_hash: e.content_hash.clone(),
-            created_at: e.created_at.clone(),
+            last_used_at: e.last_used_at.clone(),
             is_favorite: e.is_favorite,
             is_sensitive: e.is_sensitive,
             size_bytes: e.size_bytes,

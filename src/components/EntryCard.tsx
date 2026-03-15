@@ -1,30 +1,36 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 
 interface EntryCardProps {
   id: string;
   contentType: string;
-  createdAt: string;
+  lastUsedAt: string;
   isFavorite: boolean;
   isSensitive: boolean;
   sizeBytes: number;
   sourceApp: string | null;
   preview: string | null;
+  isSelected: boolean;
+  shortcutKey: string | null;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
+  onCopyBack: (id: string) => Promise<void>;
 }
 
-export function EntryCard({
+export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function EntryCard({
   id,
   contentType,
-  createdAt,
+  lastUsedAt,
   isFavorite,
   isSensitive,
   sizeBytes,
   sourceApp,
   preview,
+  isSelected,
+  shortcutKey,
   onToggleFavorite,
   onDelete,
-}: EntryCardProps) {
+  onCopyBack,
+}, ref) {
   const [revealed, setRevealed] = useState(false);
 
   const formatTime = (iso: string) => {
@@ -48,20 +54,39 @@ export function EntryCard({
   };
 
   const displayContent = () => {
-    if (!preview) return "[Encrypted]";
+    if (!preview) return "[No preview]";
+    if (contentType === "image") return null;
     if (isSensitive && !revealed) return "••••••••••••";
     return preview;
   };
 
   return (
-    <div className="group px-4 py-3 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+    <div
+      ref={ref}
+      className={`group px-4 py-3 border-b border-zinc-800/50 transition-colors ${
+        isSelected ? "bg-zinc-800/70 ring-1 ring-zinc-600" : "hover:bg-zinc-900/50"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
+        {shortcutKey !== null && (
+          <span className="shrink-0 w-4 h-4 rounded-sm bg-zinc-800/80 text-zinc-500 text-[10px] font-medium flex items-center justify-center mt-0.5">
+            {shortcutKey}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200 truncate font-mono">
-            {displayContent()}
-          </p>
+          {contentType === "image" && preview ? (
+            <img
+              src={preview}
+              alt="Clipboard image"
+              className="max-h-24 rounded border border-zinc-700 object-contain"
+            />
+          ) : (
+            <p className="text-sm text-zinc-200 truncate font-mono">
+              {displayContent()}
+            </p>
+          )}
           <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-xs text-zinc-500">{formatTime(createdAt)}</span>
+            <span className="text-xs text-zinc-500">{formatTime(lastUsedAt)}</span>
             <span className="text-xs text-zinc-600">·</span>
             <span className="text-xs text-zinc-500">{formatSize(sizeBytes)}</span>
             {contentType === "image" && (
@@ -85,7 +110,30 @@ export function EntryCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className={`flex items-center gap-1 transition-opacity ${
+          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}>
+          <button
+            onClick={() => onCopyBack(id)}
+            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Copy to clipboard"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+
           {isSensitive && (
             <button
               onClick={() => setRevealed(!revealed)}
@@ -167,4 +215,4 @@ export function EntryCard({
       </div>
     </div>
   );
-}
+});

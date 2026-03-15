@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { EntryCard } from "./EntryCard";
 
 interface Entry {
   id: string;
   content_type: string;
-  created_at: string;
+  last_used_at: string;
   is_favorite: boolean;
   is_sensitive: boolean;
   size_bytes: number;
@@ -26,6 +26,8 @@ export function ClipboardList({
 }: ClipboardListProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const entryRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -57,6 +59,53 @@ export function ClipboardList({
     return () => clearInterval(interval);
   }, [fetchEntries]);
 
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery, filterType, favoritesOnly]);
+
+  useEffect(() => {
+    entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        invoke("hide_to_tray");
+        return;
+      }
+
+      if (entries.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, entries.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const entry = entries[selectedIndex];
+        if (entry) handleCopyBack(entry.id);
+      }
+
+      if (!searchQuery && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const digit = parseInt(e.key, 10);
+        if (!isNaN(digit)) {
+          const index = digit === 0 ? 9 : digit - 1;
+          const entry = entries[index];
+          if (entry) {
+            e.preventDefault();
+            handleCopyBack(entry.id);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [entries, selectedIndex, searchQuery]);
+
   const handleToggleFavorite = async (id: string) => {
     try {
       await invoke("toggle_favorite", { id });
@@ -73,6 +122,11 @@ export function ClipboardList({
     } catch (err) {
       console.error("Failed to delete entry:", err);
     }
+  };
+
+  const handleCopyBack = async (id: string) => {
+    await invoke("copy_entry_to_clipboard", { id });
+    await invoke("hide_to_tray");
   };
 
   if (loading) {
@@ -113,21 +167,32 @@ export function ClipboardList({
     );
   }
 
+  const shortcutKeyForIndex = (index: number): string | null => {
+    if (searchQuery) return null;
+    if (index < 9) return String(index + 1);
+    if (index === 9) return "0";
+    return null;
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
-      {entries.map((entry) => (
+      {entries.map((entry, index) => (
         <EntryCard
           key={entry.id}
+          ref={(el) => { entryRefs.current[index] = el; }}
           id={entry.id}
           contentType={entry.content_type}
-          createdAt={entry.created_at}
+          lastUsedAt={entry.last_used_at}
           isFavorite={entry.is_favorite}
           isSensitive={entry.is_sensitive}
           sizeBytes={entry.size_bytes}
           sourceApp={entry.source_app}
           preview={entry.preview}
+          isSelected={index === selectedIndex}
+          shortcutKey={shortcutKeyForIndex(index)}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
+          onCopyBack={handleCopyBack}
         />
       ))}
     </div>

@@ -84,10 +84,7 @@ export default function App() {
             </svg>
           </button>
           <button
-            onClick={async () => {
-              const { getCurrentWindow } = await import("@tauri-apps/api/window");
-              getCurrentWindow().hide();
-            }}
+            onClick={() => invoke("hide_to_tray")}
             className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
             title="Hide to tray"
           >

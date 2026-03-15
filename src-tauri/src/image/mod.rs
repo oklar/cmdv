@@ -1,5 +1,17 @@
-use image::io::Reader as ImageReader;
+use image::ImageReader;
 use std::io::Cursor;
+
+pub fn decode_to_rgba(image_data: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
+    let img = ImageReader::new(Cursor::new(image_data))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?
+        .decode()
+        .map_err(|e| e.to_string())?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok((rgba.into_raw(), width, height))
+}
 
 pub fn convert_to_webp(image_data: &[u8], quality: f32) -> Result<Vec<u8>, String> {
     let img = ImageReader::new(Cursor::new(image_data))
@@ -12,6 +24,21 @@ pub fn convert_to_webp(image_data: &[u8], quality: f32) -> Result<Vec<u8>, Strin
     let (width, height) = rgba.dimensions();
 
     let encoder = webp::Encoder::from_rgba(&rgba, width, height);
+    let webp_data = encoder.encode(quality);
+
+    Ok(webp_data.to_vec())
+}
+
+pub fn rgba_to_webp(rgba: &[u8], width: u32, height: u32, quality: f32) -> Result<Vec<u8>, String> {
+    let expected = (width * height * 4) as usize;
+    if rgba.len() != expected {
+        return Err(format!(
+            "RGBA buffer size mismatch: expected {} bytes ({}x{}x4), got {}",
+            expected, width, height, rgba.len()
+        ));
+    }
+
+    let encoder = webp::Encoder::from_rgba(rgba, width, height);
     let webp_data = encoder.encode(quality);
 
     Ok(webp_data.to_vec())
@@ -85,5 +112,21 @@ mod tests {
         assert!(result.is_ok());
         let webp = result.unwrap();
         assert!(!webp.is_empty());
+    }
+
+    #[test]
+    fn convert_raw_rgba_to_webp() {
+        let width: u32 = 4;
+        let height: u32 = 4;
+        let pixel = [0u8, 128, 255, 255]; // RGBA
+        let rgba: Vec<u8> = pixel.iter().copied().cycle().take((width * height * 4) as usize).collect();
+
+        let result = rgba_to_webp(&rgba, width, height, 80.0);
+        assert!(result.is_ok());
+        let webp = result.unwrap();
+        assert!(!webp.is_empty());
+        assert!(webp.len() >= 12);
+        assert_eq!(&webp[0..4], b"RIFF");
+        assert_eq!(&webp[8..12], b"WEBP");
     }
 }

@@ -1,4 +1,4 @@
-use crate::db::{ClipboardEntry, EntryType, NewEntry};
+use crate::db::ClipboardEntry;
 use crate::sync::blob::SyncEntry;
 use std::collections::HashMap;
 
@@ -17,12 +17,10 @@ pub fn merge_entries(
         merged
             .entry(entry.id.clone())
             .and_modify(|existing| {
-                // Favorites always win
                 if entry.is_favorite && !existing.is_favorite {
                     *existing = sync_entry.clone();
                 }
-                // Last-write-wins for non-favorites
-                if entry.created_at > existing.created_at {
+                if entry.last_used_at > existing.last_used_at {
                     let was_fav = existing.is_favorite;
                     *existing = sync_entry.clone();
                     if was_fav {
@@ -34,6 +32,6 @@ pub fn merge_entries(
     }
 
     let mut result: Vec<SyncEntry> = merged.into_values().collect();
-    result.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    result.sort_by(|a, b| a.last_used_at.cmp(&b.last_used_at));
     result
 }

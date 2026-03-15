@@ -43,14 +43,43 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   if (step === "mnemonic") {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-8">
-        <MnemonicDisplay words={mnemonicWords} onConfirm={onComplete} />
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
+          <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
+          <button
+            onClick={() => invoke("hide_to_tray")}
+            className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Hide to tray"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <MnemonicDisplay words={mnemonicWords} onConfirm={onComplete} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+      <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
+        <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
+        <button
+          onClick={() => invoke("hide_to_tray")}
+          className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+          title="Hide to tray"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div className="flex-1 flex items-center justify-center p-8">
       <div className="max-w-md w-full space-y-8">
         {step === "welcome" && (
           <div className="text-center space-y-6">
@@ -122,6 +151,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

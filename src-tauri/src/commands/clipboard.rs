@@ -1,4 +1,3 @@
-use crate::crypto;
 use crate::crypto::keys::VaultState;
 use crate::db::{Database, EntryType};
 use serde::Serialize;
@@ -9,7 +8,7 @@ use tauri::State;
 pub struct EntryView {
     pub id: String,
     pub content_type: String,
-    pub created_at: String,
+    pub last_used_at: String,
     pub is_favorite: bool,
     pub is_sensitive: bool,
     pub size_bytes: i64,
@@ -24,17 +23,21 @@ pub struct StatsView {
     pub max_size_bytes: i64,
 }
 
-fn decrypt_preview(entry_key: &[u8; 32], nonce: &[u8], ciphertext: &[u8]) -> Option<String> {
-    crypto::encrypt::decrypt(entry_key, nonce, ciphertext)
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok())
-        .map(|s| {
+fn make_preview(content: &[u8], content_type: &EntryType) -> Option<String> {
+    match content_type {
+        EntryType::Text => String::from_utf8(content.to_vec()).ok().map(|s| {
             if s.len() > 200 {
                 s[..200].to_string()
             } else {
                 s
             }
-        })
+        }),
+        EntryType::Image => {
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(content);
+            Some(format!("data:image/webp;base64,{}", b64))
+        }
+    }
 }
 
 #[tauri::command]
@@ -46,8 +49,8 @@ pub fn get_entries(
     content_type: Option<String>,
     favorites_only: Option<bool>,
 ) -> Result<Vec<EntryView>, String> {
-    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    vault.keys.lock().map_err(|_| "Lock poisoned")?
+        .as_ref().ok_or("Vault is locked")?;
 
     let entry_type = content_type.map(|t| EntryType::from_str(&t));
     let entries = db
@@ -59,17 +62,14 @@ pub fn get_entries(
         )
         .map_err(|e| e.to_string())?;
 
-    let entry_key = keys.entry_key;
-    drop(guard);
-
     Ok(entries
         .into_iter()
         .map(|e| {
-            let preview = decrypt_preview(&entry_key, &e.nonce, &e.encrypted_payload);
+            let preview = make_preview(&e.content, &e.content_type);
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
-                created_at: e.created_at,
+                last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 is_sensitive: e.is_sensitive,
                 size_bytes: e.size_bytes,
@@ -87,24 +87,21 @@ pub fn search_entries(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<EntryView>, String> {
-    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    vault.keys.lock().map_err(|_| "Lock poisoned")?
+        .as_ref().ok_or("Vault is locked")?;
 
     let entries = db
         .search_entries(&query, limit.unwrap_or(20))
         .map_err(|e| e.to_string())?;
 
-    let entry_key = keys.entry_key;
-    drop(guard);
-
     Ok(entries
         .into_iter()
         .map(|e| {
-            let preview = decrypt_preview(&entry_key, &e.nonce, &e.encrypted_payload);
+            let preview = make_preview(&e.content, &e.content_type);
             EntryView {
                 id: e.id,
                 content_type: e.content_type.as_str().to_string(),
-                created_at: e.created_at,
+                last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 is_sensitive: e.is_sensitive,
                 size_bytes: e.size_bytes,
@@ -139,4 +136,46 @@ pub fn get_stats(db: State<'_, Arc<Database>>) -> Result<StatsView, String> {
         total_size_bytes,
         max_size_bytes: 50 * 1024 * 1024,
     })
+}
+
+#[tauri::command]
+pub fn copy_entry_to_clipboard(
+    id: String,
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+) -> Result<(), String> {
+    vault
+        .keys
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .as_ref()
+        .ok_or("Vault is locked")?;
+
+    let entry = db
+        .get_entry(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Entry not found")?;
+
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+
+    match entry.content_type {
+        EntryType::Text => {
+            let text = String::from_utf8(entry.content).map_err(|e| e.to_string())?;
+            clipboard.set_text(text).map_err(|e| e.to_string())?;
+        }
+        EntryType::Image => {
+            let (rgba, width, height) =
+                crate::image::decode_to_rgba(&entry.content).map_err(|e| e.to_string())?;
+            let img_data = arboard::ImageData {
+                width: width as usize,
+                height: height as usize,
+                bytes: std::borrow::Cow::Owned(rgba),
+            };
+            clipboard.set_image(img_data).map_err(|e| e.to_string())?;
+        }
+    }
+
+    db.touch_entry(&id).map_err(|e| e.to_string())?;
+
+    Ok(())
 }

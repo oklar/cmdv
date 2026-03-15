@@ -98,7 +98,6 @@ pub fn setup_vault(
     keychain.save_seed(master_key.as_bytes())?;
 
     let app_keys = AppKeys::new(
-        master_key.derive_entry_key(),
         master_key.derive_hash_key(),
         master_key.derive_db_key(),
     );
@@ -145,7 +144,6 @@ pub fn unlock_vault(
             let master_key = MasterKey::from_bytes(bytes);
 
             let app_keys = AppKeys::new(
-                master_key.derive_entry_key(),
                 master_key.derive_hash_key(),
                 master_key.derive_db_key(),
             );
@@ -193,7 +191,6 @@ pub fn try_auto_unlock(
             let master_key = MasterKey::from_bytes(bytes);
 
             let app_keys = AppKeys::new(
-                master_key.derive_entry_key(),
                 master_key.derive_hash_key(),
                 master_key.derive_db_key(),
             );
@@ -252,7 +249,6 @@ pub fn recover_vault(
     keychain.save_seed(master_key.as_bytes())?;
 
     let app_keys = AppKeys::new(
-        master_key.derive_entry_key(),
         master_key.derive_hash_key(),
         master_key.derive_db_key(),
     );
@@ -366,6 +362,8 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     }
 
     lines.push(String::new());
+    lines.push("Vault Password: ________________________________________".into());
+    lines.push(String::new());
     lines.push("WARNING: Anyone with these words and your password can".into());
     lines.push("decrypt your clipboard data. Delete this file after".into());
     lines.push("storing the phrase securely.".into());
@@ -387,10 +385,17 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
         }
         let size = if i == 0 { title_size } else { font_size };
         let escaped = line.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)");
-        text_ops.push_str(&format!(
-            "/F1 {} Tf {} {} Td ({}) Tj\n",
-            size, margin, y, escaped
-        ));
+        if i == 0 {
+            text_ops.push_str(&format!(
+                "/F1 {} Tf {} {} Td ({}) Tj\n",
+                size, margin, y, escaped
+            ));
+        } else {
+            text_ops.push_str(&format!(
+                "/F1 {} Tf 0 -{} Td ({}) Tj\n",
+                size, leading, escaped
+            ));
+        }
     }
     text_ops.push_str("ET\n");
 
@@ -453,7 +458,6 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
 
     let guard = vault.keys.lock().unwrap();
     let keys = guard.as_ref().expect("keys must be set before monitoring");
-    let entry_key = keys.entry_key;
     let hash_key = keys.hash_key;
     drop(guard);
 
@@ -469,7 +473,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
             .with_excluded_apps(excluded_apps);
         let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
-            match monitor.poll_once(&poll_db, &entry_key, &hash_key, max_entry_size) {
+            match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
                 Ok(Some(id)) => {
                     log::info!("Captured clipboard entry: {}", id);
                     enforce_storage_limit(&poll_db, max_total_size);
@@ -503,7 +507,7 @@ pub fn export_database(
     db: tauri::State<'_, Arc<Database>>,
 ) -> Result<usize, String> {
     let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    let keys = guard.as_ref().ok_or("Vault is locked")?;
+    guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
         let keychain = crate::storage::keychain::KeychainStore::new();
         let seed = keychain.load_seed()?;
@@ -552,8 +556,7 @@ pub fn import_database(
     for entry in &merged {
         if !db.entry_exists_by_hash(&entry.content_hash).map_err(|e| e.to_string())? {
             let new_entry = crate::db::NewEntry {
-                encrypted_payload: entry.encrypted_payload.clone(),
-                nonce: entry.nonce.clone(),
+                content: entry.content.clone(),
                 content_type: crate::db::EntryType::from_str(&entry.content_type),
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,

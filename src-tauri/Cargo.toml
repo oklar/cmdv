@@ -65,6 +65,9 @@ qrcode = "0.14"
 base64 = "0.22"
 hex = "0.4"
 
+# Notifications
+notify-rust = "4"
+
 # Platform memory locking
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

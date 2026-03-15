@@ -1,8 +1,8 @@
 use arboard::Clipboard;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
+use crate::image as img;
 use crate::sensitive;
 
 use super::source;
@@ -30,16 +30,13 @@ impl ClipboardMonitor {
     pub fn poll_once(
         &mut self,
         db: &Database,
-        encryption_key: &[u8; 32],
         hash_key: &[u8; 32],
         max_entry_size: usize,
     ) -> Result<Option<String>, String> {
-        // Skip if clipboard is marked as concealed by the OS
         if sensitive::flags::is_clipboard_concealed() {
             return Ok(None);
         }
 
-        // Skip if the source app is in the exclude list
         let source_app = source::get_foreground_app();
         if let Some(ref app) = source_app {
             if source::is_excluded_with_custom(app, &self.excluded_apps) {
@@ -69,12 +66,9 @@ impl ClipboardMonitor {
             }
 
             let is_sensitive = sensitive::detect::is_sensitive(&text);
-            let (nonce, ciphertext) =
-                crypto::encrypt::encrypt(encryption_key, text.as_bytes()).map_err(|e| e.to_string())?;
 
             let entry = NewEntry {
-                encrypted_payload: ciphertext,
-                nonce,
+                content: text.as_bytes().to_vec(),
                 content_type: EntryType::Text,
                 content_hash: content_hash.clone(),
                 size_bytes: text.len() as i64,
@@ -85,6 +79,47 @@ impl ClipboardMonitor {
 
             let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
             self.last_text_hash = Some(content_hash);
+
+            return Ok(Some(id));
+        }
+
+        if let Ok(image_data) = clipboard.get_image() {
+            let rgba = &image_data.bytes;
+            if rgba.is_empty() {
+                return Ok(None);
+            }
+
+            let content_hash = crypto::hash::keyed_hash(hash_key, rgba);
+
+            if self.last_image_hash.as_deref() == Some(&content_hash) {
+                return Ok(None);
+            }
+
+            if db.entry_exists_by_hash(&content_hash).map_err(|e| e.to_string())? {
+                self.last_image_hash = Some(content_hash);
+                return Ok(None);
+            }
+
+            let (width, height) = (image_data.width as u32, image_data.height as u32);
+
+            let webp_bytes = img::rgba_to_webp(rgba, width, height, 80.0)?;
+
+            if webp_bytes.len() > max_entry_size {
+                return Ok(None);
+            }
+
+            let entry = NewEntry {
+                content: webp_bytes.clone(),
+                content_type: EntryType::Image,
+                content_hash: content_hash.clone(),
+                size_bytes: webp_bytes.len() as i64,
+                is_favorite: false,
+                is_sensitive: false,
+                source_app,
+            };
+
+            let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
+            self.last_image_hash = Some(content_hash);
 
             return Ok(Some(id));
         }

@@ -39,6 +39,37 @@ fn show_window(app: &tauri::AppHandle) {
     let _ = window.as_ref().window().move_window(Position::Center);
     let _ = window.show();
     let _ = window.set_focus();
+
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some("CMDV Clipboard Manager"));
+    }
+}
+
+#[tauri::command]
+fn hide_to_tray(app: tauri::AppHandle, vault: tauri::State<'_, Arc<VaultState>>) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+
+    let unlocked = vault.keys.lock()
+        .map(|g| g.is_some())
+        .unwrap_or(false);
+
+    if !unlocked {
+        if let Some(tray) = app.tray_by_id("main") {
+            let _ = tray.set_tooltip(Some("CMDV — Setup incomplete. Click to continue."));
+        }
+
+        let _ = notify_rust::Notification::new()
+            .summary("Setup incomplete")
+            .appname("CMDV")
+            .body("Setup is incomplete. Click the tray icon to continue.")
+            .auto_icon()
+            .timeout(10000)
+            .show();
+    }
+
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -69,7 +100,7 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quit_item])?;
 
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("CMDV Clipboard Manager")
                 .menu(&menu)
@@ -129,6 +160,13 @@ pub fn run() {
                     if SUPPRESS_BLUR_HIDE.load(Ordering::Relaxed) {
                         return;
                     }
+                    let vault_unlocked = handle
+                        .try_state::<Arc<VaultState>>()
+                        .map(|v| v.keys.lock().map(|g| g.is_some()).unwrap_or(false))
+                        .unwrap_or(false);
+                    if !vault_unlocked {
+                        return;
+                    }
                     if let Some(w) = handle.get_webview_window("main") {
                         if !w.is_focused().unwrap_or(false) {
                             let _ = w.hide();
@@ -142,12 +180,14 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            hide_to_tray,
             commands::clipboard::get_entries,
             commands::clipboard::search_entries,
             commands::clipboard::toggle_favorite,
             commands::clipboard::delete_entry,
             commands::clipboard::clear_all_entries,
             commands::clipboard::get_stats,
+            commands::clipboard::copy_entry_to_clipboard,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::vault::get_vault_status,
