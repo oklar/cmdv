@@ -88,47 +88,6 @@ export function Settings() {
       )}
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-3">General</h2>
-        <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
-          <SettingRow label="Poll interval" description="How often to check clipboard">
-            <select
-              value={settings.poll_interval_ms}
-              onChange={(e) =>
-                saveSettings({
-                  ...settings,
-                  poll_interval_ms: Number(e.target.value),
-                })
-              }
-              className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
-            >
-              <option value={500}>0.5s</option>
-              <option value={1000}>1s</option>
-              <option value={2000}>2s</option>
-              <option value={5000}>5s</option>
-            </select>
-          </SettingRow>
-          <SettingRow label="WebP quality" description="Image compression quality">
-            <input
-              type="range"
-              min="50"
-              max="100"
-              value={settings.webp_quality}
-              onChange={(e) =>
-                saveSettings({
-                  ...settings,
-                  webp_quality: Number(e.target.value),
-                })
-              }
-              className="w-24"
-            />
-            <span className="text-xs text-zinc-500 ml-2 w-8">
-              {settings.webp_quality}%
-            </span>
-          </SettingRow>
-        </div>
-      </section>
-
-      <section>
         <h2 className="text-sm font-medium text-zinc-300 mb-3">Security</h2>
         <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
           <SettingRow
@@ -141,27 +100,6 @@ export function Settings() {
             >
               Show QR
             </button>
-          </SettingRow>
-          <SettingRow
-            label="Sensitive auto-expire"
-            description="Auto-delete sensitive entries after"
-          >
-            <select
-              value={settings.sensitive_auto_expire_secs}
-              onChange={(e) =>
-                saveSettings({
-                  ...settings,
-                  sensitive_auto_expire_secs: Number(e.target.value),
-                })
-              }
-              className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
-            >
-              <option value={60}>1 min</option>
-              <option value={300}>5 min</option>
-              <option value={600}>10 min</option>
-              <option value={1800}>30 min</option>
-              <option value={0}>Never</option>
-            </select>
           </SettingRow>
           <SettingRow
             label="Require password on open"
@@ -185,56 +123,6 @@ export function Settings() {
               />
             </button>
           </SettingRow>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-3">Mode</h2>
-        <div className="bg-zinc-900 rounded-lg p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                settings.mode === "cloud" ? "bg-blue-400" : "bg-emerald-500"
-              }`}
-            />
-            <span className="text-sm text-zinc-300">
-              {settings.mode === "cloud" ? "Cloud sync enabled" : "Local only"}
-            </span>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {settings.mode === "cloud"
-              ? "Your clipboard syncs across devices"
-              : "All data stays on this device"}
-          </p>
-          {settings.mode === "local" ? (
-            <button
-              onClick={async () => {
-                try {
-                  await invoke("switch_to_cloud");
-                  setSettings({ ...settings, mode: "cloud" });
-                } catch (err) {
-                  alert(String(err));
-                }
-              }}
-              className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
-            >
-              Enable Cloud Sync
-            </button>
-          ) : (
-            <button
-              onClick={async () => {
-                try {
-                  await invoke("switch_to_local");
-                  setSettings({ ...settings, mode: "local" });
-                } catch (err) {
-                  alert(String(err));
-                }
-              }}
-              className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-            >
-              Switch to Local Only
-            </button>
-          )}
         </div>
       </section>
 
@@ -286,125 +174,148 @@ export function Settings() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-3">Account</h2>
-        <div className="bg-zinc-900 rounded-lg p-4 space-y-3">
-          <AccountSection />
-        </div>
-      </section>
-
       <AboutSection />
 
-      <DevSection />
+      <DevSection settings={settings} onSaveSettings={saveSettings} />
     </div>
   );
 }
 
-function AccountSection() {
-  const [auth, setAuth] = useState<{
-    is_authenticated: boolean;
-    email: string | null;
-    has_subscription: boolean;
-  } | null>(null);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [showLogin, setShowLogin] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function DevSection({
+  settings,
+  onSaveSettings,
+}: {
+  settings: AppSettings;
+  onSaveSettings: (updated: AppSettings) => Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
 
-  useEffect(() => {
-    invoke<typeof auth>("get_auth_status").then(setAuth).catch(() => {});
-  }, []);
+  const handleReset = async () => {
+    if (confirming !== "reset") {
+      setConfirming("reset");
+      return;
+    }
+    try {
+      await invoke("reset_vault");
+    } catch (err) {
+      alert(String(err));
+      setConfirming(null);
+    }
+  };
 
-  if (!auth) return <div className="text-sm text-zinc-500">Loading...</div>;
-
-  if (auth.is_authenticated) {
-    return (
-      <div className="space-y-2">
-        <div className="text-sm text-zinc-300">{auth.email}</div>
-        <div className="text-xs text-zinc-500">
-          {auth.has_subscription ? "Active subscription" : "No subscription"}
-        </div>
-        <button
-          onClick={async () => {
-            await invoke("logout");
-            setAuth({ is_authenticated: false, email: null, has_subscription: false });
-          }}
-          className="text-xs text-red-400 hover:text-red-300"
-        >
-          Sign out
-        </button>
-      </div>
-    );
-  }
-
-  if (!showLogin) {
-    return (
-      <button
-        onClick={() => setShowLogin(true)}
-        className="text-sm text-blue-400 hover:text-blue-300"
-      >
-        Sign in for cloud sync
-      </button>
-    );
-  }
+  const handleClearEntries = async () => {
+    if (confirming !== "clear") {
+      setConfirming("clear");
+      return;
+    }
+    try {
+      await invoke("clear_all_entries");
+      alert("All entries cleared");
+      setConfirming(null);
+    } catch (err) {
+      alert(String(err));
+      setConfirming(null);
+    }
+  };
 
   return (
-    <div className="space-y-3">
-      {error && <div className="text-xs text-red-400">{error}</div>}
-      <input
-        type="email"
-        placeholder="Email"
-        value={loginForm.email}
-        onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-        className="w-full bg-zinc-800 text-zinc-300 text-sm rounded-md px-3 py-2 border border-zinc-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={loginForm.password}
-        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-        className="w-full bg-zinc-800 text-zinc-300 text-sm rounded-md px-3 py-2 border border-zinc-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-      />
-      <div className="flex gap-2">
-        <button
-          onClick={async () => {
-            try {
-              setError(null);
-              await invoke("login", loginForm);
-              const status = await invoke<typeof auth>("get_auth_status");
-              setAuth(status);
-              setShowLogin(false);
-            } catch (err) {
-              setError(String(err));
+    <section>
+      <h2 className="text-sm font-medium text-zinc-300 mb-3">Developer</h2>
+      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+        <SettingRow label="Poll interval" description="How often to check clipboard">
+          <select
+            value={settings.poll_interval_ms}
+            onChange={(e) =>
+              onSaveSettings({
+                ...settings,
+                poll_interval_ms: Number(e.target.value),
+              })
             }
-          }}
-          className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
-        >
-          Sign in
-        </button>
-        <button
-          onClick={async () => {
-            try {
-              setError(null);
-              await invoke("register", loginForm);
-              const status = await invoke<typeof auth>("get_auth_status");
-              setAuth(status);
-              setShowLogin(false);
-            } catch (err) {
-              setError(String(err));
+            className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
+          >
+            <option value={500}>0.5s</option>
+            <option value={1000}>1s</option>
+            <option value={2000}>2s</option>
+            <option value={5000}>5s</option>
+          </select>
+        </SettingRow>
+        <SettingRow label="WebP quality" description="Image compression quality">
+          <input
+            type="range"
+            min="50"
+            max="100"
+            value={settings.webp_quality}
+            onChange={(e) =>
+              onSaveSettings({
+                ...settings,
+                webp_quality: Number(e.target.value),
+              })
             }
-          }}
-          className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+            className="w-24"
+          />
+          <span className="text-xs text-zinc-500 ml-2 w-8">
+            {settings.webp_quality}%
+          </span>
+        </SettingRow>
+        <SettingRow
+          label="Sensitive auto-expire"
+          description="Auto-delete sensitive entries after"
         >
-          Register
-        </button>
+          <select
+            value={settings.sensitive_auto_expire_secs}
+            onChange={(e) =>
+              onSaveSettings({
+                ...settings,
+                sensitive_auto_expire_secs: Number(e.target.value),
+              })
+            }
+            className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
+          >
+            <option value={60}>1 min</option>
+            <option value={300}>5 min</option>
+            <option value={600}>10 min</option>
+            <option value={1800}>30 min</option>
+            <option value={0}>Never</option>
+          </select>
+        </SettingRow>
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-zinc-300">Clear all entries</div>
+            <div className="text-xs text-zinc-500">
+              Delete all clipboard entries but keep vault
+            </div>
+          </div>
+          <button
+            onClick={handleClearEntries}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              confirming === "clear"
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+            }`}
+          >
+            {confirming === "clear" ? "Confirm" : "Clear"}
+          </button>
+        </div>
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm text-red-400">Reset vault</div>
+            <div className="text-xs text-zinc-500">
+              Wipe everything — DB, keys, keychain. App will restart.
+            </div>
+          </div>
+          <button
+            onClick={handleReset}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              confirming === "reset"
+                ? "bg-red-600 hover:bg-red-500 text-white"
+                : "bg-zinc-800 hover:bg-zinc-700 text-red-400"
+            }`}
+          >
+            {confirming === "reset" ? "Confirm reset" : "Reset"}
+          </button>
+        </div>
       </div>
-      <button
-        onClick={() => setShowLogin(false)}
-        className="text-xs text-zinc-500 hover:text-zinc-400"
-      >
-        Cancel
-      </button>
-    </div>
+    </section>
   );
 }
 
@@ -466,82 +377,6 @@ function AboutSection() {
             The app will relaunch if an update is installed.
           </div>
         )}
-      </div>
-    </section>
-  );
-}
-
-function DevSection() {
-  const [confirming, setConfirming] = useState<string | null>(null);
-
-  const handleReset = async () => {
-    if (confirming !== "reset") {
-      setConfirming("reset");
-      return;
-    }
-    try {
-      await invoke("reset_vault");
-    } catch (err) {
-      alert(String(err));
-      setConfirming(null);
-    }
-  };
-
-  const handleClearEntries = async () => {
-    if (confirming !== "clear") {
-      setConfirming("clear");
-      return;
-    }
-    try {
-      await invoke("clear_all_entries");
-      alert("All entries cleared");
-      setConfirming(null);
-    } catch (err) {
-      alert(String(err));
-      setConfirming(null);
-    }
-  };
-
-  return (
-    <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-3">Developer</h2>
-      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-sm text-zinc-300">Clear all entries</div>
-            <div className="text-xs text-zinc-500">
-              Delete all clipboard entries but keep vault
-            </div>
-          </div>
-          <button
-            onClick={handleClearEntries}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-              confirming === "clear"
-                ? "bg-red-600 hover:bg-red-500 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-            }`}
-          >
-            {confirming === "clear" ? "Confirm" : "Clear"}
-          </button>
-        </div>
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-sm text-red-400">Reset vault</div>
-            <div className="text-xs text-zinc-500">
-              Wipe everything — DB, keys, keychain. App will restart.
-            </div>
-          </div>
-          <button
-            onClick={handleReset}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-              confirming === "reset"
-                ? "bg-red-600 hover:bg-red-500 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-red-400"
-            }`}
-          >
-            {confirming === "reset" ? "Confirm reset" : "Reset"}
-          </button>
-        </div>
       </div>
     </section>
   );

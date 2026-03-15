@@ -32,7 +32,7 @@ impl Default for AppSettings {
             max_total_size_bytes: 50 * 1024 * 1024,
             sensitive_auto_expire_secs: 300,
             sync_interval_secs: 30,
-            webp_quality: 80.0,
+            webp_quality: 100.0,
             excluded_apps: vec![
                 "1password".into(),
                 "bitwarden".into(),
