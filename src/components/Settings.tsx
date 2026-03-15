@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { getVersion } from "@tauri-apps/api/app";
 import { QrPairing } from "./QrPairing";
 
 interface AppSettings {
@@ -290,6 +293,8 @@ export function Settings() {
         </div>
       </section>
 
+      <AboutSection />
+
       <DevSection />
     </div>
   );
@@ -400,6 +405,69 @@ function AccountSection() {
         Cancel
       </button>
     </div>
+  );
+}
+
+function AboutSection() {
+  const [version, setVersion] = useState("");
+  const [updateStatus, setUpdateStatus] = useState<
+    "idle" | "checking" | "downloading" | "up-to-date" | "error"
+  >("idle");
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
+
+  const checkForUpdate = async () => {
+    setUpdateStatus("checking");
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateStatus("up-to-date");
+        return;
+      }
+      setUpdateStatus("downloading");
+      await update.downloadAndInstall();
+      await relaunch();
+    } catch {
+      setUpdateStatus("error");
+    }
+  };
+
+  const statusLabel: Record<typeof updateStatus, string> = {
+    idle: "Check for updates",
+    checking: "Checking...",
+    downloading: "Updating...",
+    "up-to-date": "Up to date",
+    error: "Update failed",
+  };
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-zinc-300 mb-3">About</h2>
+      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+        <SettingRow label="Version" description={version || "..."}>
+          <button
+            onClick={checkForUpdate}
+            disabled={updateStatus === "checking" || updateStatus === "downloading"}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              updateStatus === "up-to-date"
+                ? "bg-emerald-900/40 text-emerald-400"
+                : updateStatus === "error"
+                  ? "bg-red-900/40 text-red-400"
+                  : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+            }`}
+          >
+            {statusLabel[updateStatus]}
+          </button>
+        </SettingRow>
+        {(updateStatus === "checking" || updateStatus === "downloading") && (
+          <div className="px-4 py-2 text-xs text-zinc-500">
+            The app will relaunch if an update is installed.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
