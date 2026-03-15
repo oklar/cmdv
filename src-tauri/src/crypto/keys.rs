@@ -69,14 +69,22 @@ impl AppKeys {
 mod mlock {
     /// Prevent memory from being swapped to disk.
     pub fn lock_mem(data: &[u8]) {
-        if data.is_empty() { return; }
-        unsafe { platform_lock(data.as_ptr(), data.len()); }
+        if data.is_empty() {
+            return;
+        }
+        unsafe {
+            platform_lock(data.as_ptr(), data.len());
+        }
     }
 
     /// Allow memory to be swapped again.
     pub fn unlock_mem(data: &[u8]) {
-        if data.is_empty() { return; }
-        unsafe { platform_unlock(data.as_ptr(), data.len()); }
+        if data.is_empty() {
+            return;
+        }
+        unsafe {
+            platform_unlock(data.as_ptr(), data.len());
+        }
     }
 
     #[cfg(unix)]
@@ -153,7 +161,11 @@ pub fn hash_password(password: &str) -> Result<([u8; 32], [u8; 32]), String> {
     Ok((hash, salt))
 }
 
-pub fn verify_password(password: &str, stored_hash: &[u8; 32], salt: &[u8; 32]) -> Result<bool, String> {
+pub fn verify_password(
+    password: &str,
+    stored_hash: &[u8; 32],
+    salt: &[u8; 32],
+) -> Result<bool, String> {
     let computed = argon2_derive(password.as_bytes(), salt)?;
     Ok(computed == *stored_hash)
 }
@@ -188,10 +200,7 @@ fn derive_key(ikm: &[u8], info: &[u8]) -> [u8; 32] {
     okm
 }
 
-pub fn wrap_master_key(
-    wrapping_key: &[u8; 32],
-    master_key: &MasterKey,
-) -> Result<Vec<u8>, String> {
+pub fn wrap_master_key(wrapping_key: &[u8; 32], master_key: &MasterKey) -> Result<Vec<u8>, String> {
     let (nonce, ciphertext) = super::encrypt::encrypt(wrapping_key, master_key.as_bytes())?;
     let mut wrapped = Vec::with_capacity(12 + ciphertext.len());
     wrapped.extend_from_slice(&nonce);
@@ -199,10 +208,7 @@ pub fn wrap_master_key(
     Ok(wrapped)
 }
 
-pub fn unwrap_master_key(
-    wrapping_key: &[u8; 32],
-    wrapped: &[u8],
-) -> Result<MasterKey, String> {
+pub fn unwrap_master_key(wrapping_key: &[u8; 32], wrapped: &[u8]) -> Result<MasterKey, String> {
     if wrapped.len() < 12 {
         return Err("Wrapped key too short".into());
     }

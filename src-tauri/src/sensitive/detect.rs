@@ -45,11 +45,15 @@ pub fn is_sensitive(content: &str) -> bool {
 }
 
 fn has_api_key_prefix(content: &str) -> bool {
-    API_KEY_PREFIXES.iter().any(|prefix| content.contains(prefix))
+    API_KEY_PREFIXES
+        .iter()
+        .any(|prefix| content.contains(prefix))
 }
 
 fn has_private_key(content: &str) -> bool {
-    PRIVATE_KEY_MARKERS.iter().any(|marker| content.contains(marker))
+    PRIVATE_KEY_MARKERS
+        .iter()
+        .any(|marker| content.contains(marker))
 }
 
 fn has_connection_string(content: &str) -> bool {
@@ -151,9 +155,7 @@ mod tests {
 
     #[test]
     fn high_entropy_detected() {
-        assert!(is_high_entropy_short_string(
-            "aB3$xK9!mQ7@pL2#nR5&wE8*"
-        ));
+        assert!(is_high_entropy_short_string("aB3$xK9!mQ7@pL2#nR5&wE8*"));
     }
 
     #[test]

@@ -26,23 +26,29 @@ pub fn get_foreground_app() -> Option<String> {
 
 pub fn is_excluded_app(app_name: &str) -> bool {
     let lower = app_name.to_lowercase();
-    EXCLUDED_APPS.iter().any(|excluded| lower.contains(excluded))
+    EXCLUDED_APPS
+        .iter()
+        .any(|excluded| lower.contains(excluded))
 }
 
 pub fn is_excluded_with_custom(app_name: &str, custom_list: &[String]) -> bool {
     let lower = app_name.to_lowercase();
-    EXCLUDED_APPS.iter().any(|excluded| lower.contains(excluded))
-        || custom_list.iter().any(|excluded| lower.contains(&excluded.to_lowercase()))
+    EXCLUDED_APPS
+        .iter()
+        .any(|excluded| lower.contains(excluded))
+        || custom_list
+            .iter()
+            .any(|excluded| lower.contains(&excluded.to_lowercase()))
 }
 
 #[cfg(target_os = "windows")]
 fn get_foreground_app_windows() -> Option<String> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
-    use windows_sys::Win32::Foundation::CloseHandle;
 
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -84,7 +90,11 @@ fn get_foreground_app_macos() -> Option<String> {
         .ok()?;
     if output.status.success() {
         let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if name.is_empty() { None } else { Some(name) }
+        if name.is_empty() {
+            None
+        } else {
+            Some(name)
+        }
     } else {
         None
     }

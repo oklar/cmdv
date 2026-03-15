@@ -2,10 +2,7 @@ use crate::db::ClipboardEntry;
 use crate::sync::blob::SyncEntry;
 use std::collections::HashMap;
 
-pub fn merge_entries(
-    local: &[ClipboardEntry],
-    remote: &[SyncEntry],
-) -> Vec<SyncEntry> {
+pub fn merge_entries(local: &[ClipboardEntry], remote: &[SyncEntry]) -> Vec<SyncEntry> {
     let mut merged: HashMap<String, SyncEntry> = HashMap::new();
 
     for entry in remote {

@@ -99,9 +99,7 @@ pub async fn trigger_sync(
             let remote_blob = blob::decrypt_blob(&blob_key, &data)?;
             (remote_blob.entries, etag)
         }
-        Err(e) if e.contains("404") || e.contains("NoSuchKey") => {
-            (Vec::new(), None)
-        }
+        Err(e) if e.contains("404") || e.contains("NoSuchKey") => (Vec::new(), None),
         Err(e) => return Err(format!("Download failed: {}", e)),
     };
 
@@ -147,9 +145,7 @@ pub async fn trigger_sync(
 }
 
 #[tauri::command]
-pub async fn get_sync_status(
-    settings_db: State<'_, Arc<SettingsDb>>,
-) -> Result<SyncState, String> {
+pub async fn get_sync_status(settings_db: State<'_, Arc<SettingsDb>>) -> Result<SyncState, String> {
     let is_authenticated = settings_db
         .get_value("auth_access_token")
         .map(|t| !t.is_empty())

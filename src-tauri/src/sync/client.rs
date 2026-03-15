@@ -60,7 +60,10 @@ impl SyncClient {
         resp.json().await.map_err(|e| e.to_string())
     }
 
-    pub async fn download_blob(&self, signed_url: &str) -> Result<(Vec<u8>, Option<String>), String> {
+    pub async fn download_blob(
+        &self,
+        signed_url: &str,
+    ) -> Result<(Vec<u8>, Option<String>), String> {
         let resp = self
             .http
             .get(signed_url)

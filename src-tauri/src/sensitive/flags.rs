@@ -15,11 +15,10 @@ pub fn is_clipboard_concealed() -> bool {
 
 #[cfg(target_os = "windows")]
 fn check_windows_concealed() -> bool {
-    use windows_sys::Win32::System::DataExchange::{
-        OpenClipboard, CloseClipboard, IsClipboardFormatAvailable,
-        RegisterClipboardFormatW,
-    };
     use std::sync::OnceLock;
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
+    };
 
     static FORMAT_ID: OnceLock<u32> = OnceLock::new();
 
@@ -50,7 +49,10 @@ fn check_macos_concealed() -> bool {
     // Check if the pasteboard has the concealed type via pbpaste metadata
     // This is a lightweight check using osascript
     let output = Command::new("osascript")
-        .args(["-e", "tell application \"System Events\" to get clipboard info"])
+        .args([
+            "-e",
+            "tell application \"System Events\" to get clipboard info",
+        ])
         .output();
     match output {
         Ok(out) => {

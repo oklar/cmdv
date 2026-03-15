@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { ClipboardList } from "./components/ClipboardList";
 import { SearchBar } from "./components/SearchBar";
 import { SyncStatus } from "./components/SyncStatus";
@@ -31,6 +33,17 @@ export default function App() {
       })
       .catch(() => setAppState("setup"));
   }, []);
+
+  useEffect(() => {
+    if (appState !== "unlocked") return;
+    check()
+      .then(async (update) => {
+        if (!update) return;
+        await update.downloadAndInstall();
+        await relaunch();
+      })
+      .catch(() => {});
+  }, [appState]);
 
   if (appState === "loading") {
     return (

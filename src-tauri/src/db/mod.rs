@@ -41,8 +41,7 @@ impl Database {
         let hex_key = hex::encode(key);
         conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", hex_key))
             .map_err(|e| format!("Failed to set DB encryption key: {}", e))?;
-        schema::initialize(conn)
-            .map_err(|e| format!("Failed to initialize schema: {}", e))?;
+        schema::initialize(conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;
         Ok(())
     }
 
@@ -79,7 +78,13 @@ impl Database {
         favorites_only: bool,
     ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
         let guard = self.conn()?;
-        entries::get_entries(guard.as_ref().unwrap(), limit, offset, entry_type, favorites_only)
+        entries::get_entries(
+            guard.as_ref().unwrap(),
+            limit,
+            offset,
+            entry_type,
+            favorites_only,
+        )
     }
 
     pub fn search_entries(
@@ -116,10 +121,7 @@ impl Database {
         entries::get_entry_count(guard.as_ref().unwrap())
     }
 
-    pub fn prune_oldest_non_favorites(
-        &self,
-        bytes_to_free: i64,
-    ) -> Result<usize, rusqlite::Error> {
+    pub fn prune_oldest_non_favorites(&self, bytes_to_free: i64) -> Result<usize, rusqlite::Error> {
         let guard = self.conn()?;
         entries::prune_oldest_non_favorites(guard.as_ref().unwrap(), bytes_to_free)
     }

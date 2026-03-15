@@ -1,73 +1,113 @@
-# React + TypeScript + Vite
+<p align="center">
+  <img src="src/assets/icon3.png" width="128" height="128" alt="CMDV icon" />
+</p>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<h1 align="center">CMDV</h1>
 
-Currently, two official plugins are available:
+<p align="center">
+  Zero-knowledge encrypted clipboard manager for Windows and Linux.
+</p>
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+<p align="center">
+  <a href="https://github.com/oklar/cmdv3/releases/latest">Download</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#development">Development</a>
+</p>
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the ESLint configuration
+- **Clipboard history** — automatically captures text, images, and files you copy
+- **Zero-knowledge encryption** — all data is encrypted locally with AES-256-GCM before it leaves your machine
+- **Mnemonic recovery** — BIP-39 mnemonic phrase for key backup and device pairing
+- **Cloud sync** — optional end-to-end encrypted sync across devices
+- **Sensitive data detection** — automatically flags passwords, tokens, and API keys
+- **Search and filter** — full-text search with content type filtering and favorites
+- **System tray** — runs quietly in the background with a global shortcut (Ctrl+U)
+- **Auto-updates** — the app silently updates itself from GitHub Releases
+- **Cross-platform** — Windows (NSIS installer) and Linux (AppImage, .deb)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Architecture
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Tailwind CSS 4, TypeScript |
+| Backend | Rust, Tauri v2 |
+| Database | SQLite with SQLCipher (encrypted at rest) |
+| Crypto | AES-256-GCM, Argon2, BLAKE3, HKDF-SHA256 |
+| Key storage | OS keychain (Windows Credential Manager / Linux Secret Service) |
+| Sync | Client-side encryption → REST API → R2 blob storage |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Download
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Grab the latest release from the [Releases page](https://github.com/oklar/cmdv3/releases/latest).
+
+| Platform | Format | File |
+|----------|--------|------|
+| Windows | NSIS installer | `cmdv_x.y.z_x64-setup.exe` |
+| Linux | AppImage (universal) | `cmdv_x.y.z_amd64.AppImage` |
+| Linux | Debian package | `cmdv_x.y.z_amd64.deb` |
+
+**Windows note:** The installer is currently unsigned, so SmartScreen may show an "unknown publisher" warning. Click "More info" → "Run anyway" to proceed.
+
+**Linux AppImage:** Make it executable and run:
+
+```bash
+chmod +x cmdv_*.AppImage
+./cmdv_*.AppImage
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- [Node.js](https://nodejs.org/) (LTS)
+- [Rust](https://rustup.rs/) (stable)
+- Tauri v2 system dependencies:
+  - **Windows:** WebView2 (included in Windows 10/11)
+  - **Linux:** `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libsecret-1-dev patchelf`
+
+### Setup
+
+```bash
+git clone https://github.com/oklar/cmdv3.git
+cd cmdv3
+npm install
 ```
+
+### Run in development
+
+```bash
+npm run tauri dev
+```
+
+### Build for production
+
+```bash
+npm run tauri build
+```
+
+Bundles are output to `src-tauri/target/release/bundle/`.
+
+## Releasing
+
+Releases are automated via GitHub Actions. To publish a new version:
+
+1. Bump `version` in `src-tauri/tauri.conf.json`
+2. Commit the change
+3. Tag and push:
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+4. GitHub Actions builds Windows + Linux artifacts and creates a **draft** release
+5. Review the draft on GitHub, then publish
+
+Existing users receive the update automatically on next app launch.
+
+## License
+
+[MIT](LICENSE)

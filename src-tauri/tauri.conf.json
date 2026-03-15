@@ -25,18 +25,49 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.cmdv.to https://*.r2.cloudflarestorage.com; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.cmdv.to https://*.r2.cloudflarestorage.com https://github.com https://objects.githubusercontent.com; font-src 'self' data:"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis", "appimage", "deb"],
+    "publisher": "cmdv",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "both"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1",
+          "libsecret-1-0"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4ODcxNTYzOTc2OTc4MjIKUldRaWVHbVhZeFdIU0VQZjh6a3pPMysrTnEzbzljZjNBalNoUHFBa0hvMnVMYjU1cmxzYUNKMWYK",
+      "endpoints": [
+        "https://github.com/oklar/cmdv3/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

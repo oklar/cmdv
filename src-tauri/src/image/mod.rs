@@ -34,7 +34,10 @@ pub fn rgba_to_webp(rgba: &[u8], width: u32, height: u32, quality: f32) -> Resul
     if rgba.len() != expected {
         return Err(format!(
             "RGBA buffer size mismatch: expected {} bytes ({}x{}x4), got {}",
-            expected, width, height, rgba.len()
+            expected,
+            width,
+            height,
+            rgba.len()
         ));
     }
 
@@ -98,7 +101,7 @@ mod tests {
 
     #[test]
     fn convert_dynamic_image_to_webp() {
-        use image::{RgbaImage, DynamicImage};
+        use image::{DynamicImage, RgbaImage};
         use std::io::Cursor;
 
         let img = RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]));
@@ -119,7 +122,12 @@ mod tests {
         let width: u32 = 4;
         let height: u32 = 4;
         let pixel = [0u8, 128, 255, 255]; // RGBA
-        let rgba: Vec<u8> = pixel.iter().copied().cycle().take((width * height * 4) as usize).collect();
+        let rgba: Vec<u8> = pixel
+            .iter()
+            .copied()
+            .cycle()
+            .take((width * height * 4) as usize)
+            .collect();
 
         let result = rgba_to_webp(&rgba, width, height, 80.0);
         assert!(result.is_ok());

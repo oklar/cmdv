@@ -60,7 +60,10 @@ impl ClipboardMonitor {
                 return Ok(None);
             }
 
-            if db.entry_exists_by_hash(&content_hash).map_err(|e| e.to_string())? {
+            if db
+                .entry_exists_by_hash(&content_hash)
+                .map_err(|e| e.to_string())?
+            {
                 self.last_text_hash = Some(content_hash);
                 return Ok(None);
             }
@@ -95,7 +98,10 @@ impl ClipboardMonitor {
                 return Ok(None);
             }
 
-            if db.entry_exists_by_hash(&content_hash).map_err(|e| e.to_string())? {
+            if db
+                .entry_exists_by_hash(&content_hash)
+                .map_err(|e| e.to_string())?
+            {
                 self.last_image_hash = Some(content_hash);
                 return Ok(None);
             }

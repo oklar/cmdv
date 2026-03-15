@@ -80,8 +80,8 @@ pub fn setup_vault(
         }
     };
 
-    let mnemonic = Mnemonic::from_entropy(master_key.as_bytes())
-        .map_err(|e| format!("BIP39 error: {}", e))?;
+    let mnemonic =
+        Mnemonic::from_entropy(master_key.as_bytes()).map_err(|e| format!("BIP39 error: {}", e))?;
     let mnemonic_entropy = mnemonic.to_entropy();
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
 
@@ -97,10 +97,7 @@ pub fn setup_vault(
 
     keychain.save_seed(master_key.as_bytes())?;
 
-    let app_keys = AppKeys::new(
-        master_key.derive_hash_key(),
-        master_key.derive_db_key(),
-    );
+    let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
     db.set_encryption_key(&app_keys.db_key)?;
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
@@ -143,10 +140,7 @@ pub fn unlock_vault(
             bytes.copy_from_slice(&seed[..32]);
             let master_key = MasterKey::from_bytes(bytes);
 
-            let app_keys = AppKeys::new(
-                master_key.derive_hash_key(),
-                master_key.derive_db_key(),
-            );
+            let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
             db.set_encryption_key(&app_keys.db_key)?;
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
@@ -190,10 +184,7 @@ pub fn try_auto_unlock(
             bytes.copy_from_slice(&seed[..32]);
             let master_key = MasterKey::from_bytes(bytes);
 
-            let app_keys = AppKeys::new(
-                master_key.derive_hash_key(),
-                master_key.derive_db_key(),
-            );
+            let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
             db.set_encryption_key(&app_keys.db_key)?;
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
@@ -222,12 +213,8 @@ pub fn recover_vault(
 
     let mut stored_hash = [0u8; 32];
     let mut stored_salt = [0u8; 32];
-    stored_hash.copy_from_slice(
-        &B64.decode(&stored_hash_b64).map_err(|e| e.to_string())?[..32],
-    );
-    stored_salt.copy_from_slice(
-        &B64.decode(&stored_salt_b64).map_err(|e| e.to_string())?[..32],
-    );
+    stored_hash.copy_from_slice(&B64.decode(&stored_hash_b64).map_err(|e| e.to_string())?[..32]);
+    stored_salt.copy_from_slice(&B64.decode(&stored_salt_b64).map_err(|e| e.to_string())?[..32]);
 
     if !verify_password(&password, &stored_hash, &stored_salt)? {
         return Err("Wrong password".into());
@@ -248,10 +235,7 @@ pub fn recover_vault(
     let keychain = KeychainStore::new();
     keychain.save_seed(master_key.as_bytes())?;
 
-    let app_keys = AppKeys::new(
-        master_key.derive_hash_key(),
-        master_key.derive_db_key(),
-    );
+    let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
     db.set_encryption_key(&app_keys.db_key)?;
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
@@ -384,7 +368,10 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
             break;
         }
         let size = if i == 0 { title_size } else { font_size };
-        let escaped = line.replace('\\', "\\\\").replace('(', "\\(").replace(')', "\\)");
+        let escaped = line
+            .replace('\\', "\\\\")
+            .replace('(', "\\(")
+            .replace(')', "\\)");
         if i == 0 {
             text_ops.push_str(&format!(
                 "/F1 {} Tf {} {} Td ({}) Tj\n",
@@ -437,16 +424,12 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     }
 
     pdf.push_str("trailer\n");
-    pdf.push_str(&format!(
-        "<< /Size {} /Root 1 0 R >>\n",
-        offsets.len() + 1
-    ));
+    pdf.push_str(&format!("<< /Size {} /Root 1 0 R >>\n", offsets.len() + 1));
     pdf.push_str("startxref\n");
     pdf.push_str(&format!("{}\n", xref_offset));
     pdf.push_str("%%EOF\n");
 
-    std::fs::write(path, pdf.as_bytes())
-        .map_err(|e| format!("Failed to write PDF: {}", e))
+    std::fs::write(path, pdf.as_bytes()).map_err(|e| format!("Failed to write PDF: {}", e))
 }
 
 fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<SettingsDb>) {
@@ -469,8 +452,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     let poll_db = db.clone();
 
     std::thread::spawn(move || {
-        let mut monitor = clipboard::ClipboardMonitor::new()
-            .with_excluded_apps(excluded_apps);
+        let mut monitor = clipboard::ClipboardMonitor::new().with_excluded_apps(excluded_apps);
         let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
             match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
@@ -520,10 +502,14 @@ pub fn export_database(
 
     let encrypted = crate::sync::blob::export_to_blob(&db, &blob_key)?;
     let entry_count = db.get_entry_count().map_err(|e| e.to_string())? as usize;
-    std::fs::write(&path, &encrypted)
-        .map_err(|e| format!("Failed to write export: {}", e))?;
+    std::fs::write(&path, &encrypted).map_err(|e| format!("Failed to write export: {}", e))?;
 
-    log::info!("Exported {} entries ({} bytes) to {}", entry_count, encrypted.len(), path);
+    log::info!(
+        "Exported {} entries ({} bytes) to {}",
+        entry_count,
+        encrypted.len(),
+        path
+    );
     Ok(entry_count)
 }
 
@@ -545,8 +531,7 @@ pub fn import_database(
     };
     drop(guard);
 
-    let data = std::fs::read(&path)
-        .map_err(|e| format!("Failed to read import file: {}", e))?;
+    let data = std::fs::read(&path).map_err(|e| format!("Failed to read import file: {}", e))?;
     let blob = crate::sync::blob::decrypt_blob(&blob_key, &data)?;
 
     let local_entries = db.get_all_entries().map_err(|e| e.to_string())?;
@@ -554,7 +539,10 @@ pub fn import_database(
 
     let mut imported = 0;
     for entry in &merged {
-        if !db.entry_exists_by_hash(&entry.content_hash).map_err(|e| e.to_string())? {
+        if !db
+            .entry_exists_by_hash(&entry.content_hash)
+            .map_err(|e| e.to_string())?
+        {
             let new_entry = crate::db::NewEntry {
                 content: entry.content.clone(),
                 content_type: crate::db::EntryType::from_str(&entry.content_type),
@@ -574,9 +562,7 @@ pub fn import_database(
 }
 
 #[tauri::command]
-pub fn generate_pairing_qr(
-    vault: tauri::State<'_, Arc<VaultState>>,
-) -> Result<String, String> {
+pub fn generate_pairing_qr(vault: tauri::State<'_, Arc<VaultState>>) -> Result<String, String> {
     let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
     if guard.is_none() {
         return Err("Vault is locked".into());
@@ -594,14 +580,12 @@ pub fn generate_pairing_qr(
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
     let payload = words.join(" ");
 
-    use qrcode::QrCode;
     use qrcode::render::svg;
+    use qrcode::QrCode;
 
-    let code = QrCode::new(payload.as_bytes())
-        .map_err(|e| format!("QR generation error: {}", e))?;
-    let svg_str = code.render::<svg::Color>()
-        .min_dimensions(256, 256)
-        .build();
+    let code =
+        QrCode::new(payload.as_bytes()).map_err(|e| format!("QR generation error: {}", e))?;
+    let svg_str = code.render::<svg::Color>().min_dimensions(256, 256).build();
 
     let data_url = format!(
         "data:image/svg+xml;base64,{}",
@@ -654,9 +638,7 @@ pub async fn switch_to_cloud(
 }
 
 #[tauri::command]
-pub fn switch_to_local(
-    settings_db: tauri::State<'_, Arc<SettingsDb>>,
-) -> Result<(), String> {
+pub fn switch_to_local(settings_db: tauri::State<'_, Arc<SettingsDb>>) -> Result<(), String> {
     let mut settings = settings_db.get_settings();
     settings.mode = crate::db::settings::AppMode::Local;
     settings_db.save_settings(&settings)?;
@@ -677,7 +659,10 @@ fn enforce_storage_limit(db: &Database, max_total_size: i64) {
         match db.prune_oldest_non_favorites(excess) {
             Ok(n) if n > 0 => log::info!(
                 "Pruned {} entries to free {} bytes (total was {}, limit {})",
-                n, excess, total, max_total_size
+                n,
+                excess,
+                total,
+                max_total_size
             ),
             Err(e) => log::warn!("Prune error: {}", e),
             _ => {}

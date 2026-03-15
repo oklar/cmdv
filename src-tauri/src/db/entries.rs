@@ -329,10 +329,14 @@ mod tests {
         fav.size_bytes = 500;
         insert_entry(&conn, &fav).unwrap();
 
-        insert_entry(&conn, &NewEntry {
-            content_hash: vec![10, 11, 12],
-            ..sample_entry()
-        }).unwrap();
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content_hash: vec![10, 11, 12],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
 
         let pruned = prune_oldest_non_favorites(&conn, 200).unwrap();
         assert_eq!(pruned, 1);
@@ -342,16 +346,24 @@ mod tests {
     #[test]
     fn search_finds_matching_text() {
         let conn = setup_db();
-        insert_entry(&conn, &NewEntry {
-            content: b"the quick brown fox".to_vec(),
-            content_hash: vec![1, 2, 3],
-            ..sample_entry()
-        }).unwrap();
-        insert_entry(&conn, &NewEntry {
-            content: b"lazy dog".to_vec(),
-            content_hash: vec![4, 5, 6],
-            ..sample_entry()
-        }).unwrap();
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: b"the quick brown fox".to_vec(),
+                content_hash: vec![1, 2, 3],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: b"lazy dog".to_vec(),
+                content_hash: vec![4, 5, 6],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
 
         let results = search_entries(&conn, "quick", 10).unwrap();
         assert_eq!(results.len(), 1);
@@ -361,16 +373,24 @@ mod tests {
     #[test]
     fn search_escapes_like_wildcards() {
         let conn = setup_db();
-        insert_entry(&conn, &NewEntry {
-            content: b"100% done".to_vec(),
-            content_hash: vec![20, 21, 22],
-            ..sample_entry()
-        }).unwrap();
-        insert_entry(&conn, &NewEntry {
-            content: b"nothing here".to_vec(),
-            content_hash: vec![30, 31, 32],
-            ..sample_entry()
-        }).unwrap();
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: b"100% done".to_vec(),
+                content_hash: vec![20, 21, 22],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: b"nothing here".to_vec(),
+                content_hash: vec![30, 31, 32],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
 
         let results = search_entries(&conn, "%", 10).unwrap();
         assert_eq!(results.len(), 1, "literal % should not match all rows");

@@ -49,8 +49,12 @@ pub fn get_entries(
     content_type: Option<String>,
     favorites_only: Option<bool>,
 ) -> Result<Vec<EntryView>, String> {
-    vault.keys.lock().map_err(|_| "Lock poisoned")?
-        .as_ref().ok_or("Vault is locked")?;
+    vault
+        .keys
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .as_ref()
+        .ok_or("Vault is locked")?;
 
     let entry_type = content_type.map(|t| EntryType::from_str(&t));
     let entries = db
@@ -87,8 +91,12 @@ pub fn search_entries(
     query: String,
     limit: Option<usize>,
 ) -> Result<Vec<EntryView>, String> {
-    vault.keys.lock().map_err(|_| "Lock poisoned")?
-        .as_ref().ok_or("Vault is locked")?;
+    vault
+        .keys
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .as_ref()
+        .ok_or("Vault is locked")?;
 
     let entries = db
         .search_entries(&query, limit.unwrap_or(20))

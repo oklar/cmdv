@@ -142,7 +142,10 @@ pub async fn login(
             .map_err(|e| format!("BIP39 error: {}", e))?;
         let mnemonic_entropy = mnemonic.to_entropy();
 
-        B64.encode(crate::crypto::keys::argon2_derive_auth(&password, &mnemonic_entropy)?)
+        B64.encode(crate::crypto::keys::argon2_derive_auth(
+            &password,
+            &mnemonic_entropy,
+        )?)
     };
 
     let client = reqwest::Client::new();
@@ -169,7 +172,11 @@ pub async fn login(
     settings_db.set_value("auth_refresh_token", &data.refresh_token)?;
     settings_db.set_value(
         "auth_has_subscription",
-        if data.has_subscription { "true" } else { "false" },
+        if data.has_subscription {
+            "true"
+        } else {
+            "false"
+        },
     )?;
 
     Ok(())
@@ -185,9 +192,7 @@ pub async fn logout(settings_db: State<'_, Arc<SettingsDb>>) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub async fn check_subscription(
-    settings_db: State<'_, Arc<SettingsDb>>,
-) -> Result<bool, String> {
+pub async fn check_subscription(settings_db: State<'_, Arc<SettingsDb>>) -> Result<bool, String> {
     let api_base = get_api_base(&settings_db);
     let token = settings_db
         .get_value("auth_access_token")
