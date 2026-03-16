@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/icon3.png" width="128" height="128" alt="CMDV icon" />
+  <img src="src/assets/icon-bg-black.png" width="128" height="128" alt="CMDV icon" />
 </p>
 
 <h1 align="center">CMDV</h1>
