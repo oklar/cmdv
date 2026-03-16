@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/oklar/cmdv3/releases/latest">Download</a> ·
+  <a href="https://github.com/oklar/cmdv/releases/latest">Download</a> ·
   <a href="#features">Features</a> ·
   <a href="#development">Development</a>
 </p>
@@ -30,24 +30,24 @@
 
 ## Architecture
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, Tailwind CSS 4, TypeScript |
-| Backend | Rust, Tauri v2 |
-| Database | SQLite with SQLCipher (encrypted at rest) |
-| Crypto | AES-256-GCM, Argon2, BLAKE3, HKDF-SHA256 |
+| Layer       | Technology                                                      |
+| ----------- | --------------------------------------------------------------- |
+| Frontend    | React 19, Tailwind CSS 4, TypeScript                            |
+| Backend     | Rust, Tauri v2                                                  |
+| Database    | SQLite with SQLCipher (encrypted at rest)                       |
+| Crypto      | AES-256-GCM, Argon2, BLAKE3, HKDF-SHA256                        |
 | Key storage | OS keychain (Windows Credential Manager / Linux Secret Service) |
-| Sync | Client-side encryption → REST API → R2 blob storage |
+| Sync        | Client-side encryption → REST API → R2 blob storage             |
 
 ## Download
 
-Grab the latest release from the [Releases page](https://github.com/oklar/cmdv3/releases/latest).
+Grab the latest release from the [Releases page](https://github.com/oklar/cmdv/releases/latest).
 
-| Platform | Format | File |
-|----------|--------|------|
-| Windows | NSIS installer | `cmdv_x.y.z_x64-setup.exe` |
-| Linux | AppImage (universal) | `cmdv_x.y.z_amd64.AppImage` |
-| Linux | Debian package | `cmdv_x.y.z_amd64.deb` |
+| Platform | Format               | File                        |
+| -------- | -------------------- | --------------------------- |
+| Windows  | NSIS installer       | `cmdv_x.y.z_x64-setup.exe`  |
+| Linux    | AppImage (universal) | `cmdv_x.y.z_amd64.AppImage` |
+| Linux    | Debian package       | `cmdv_x.y.z_amd64.deb`      |
 
 **Windows note:** The installer is currently unsigned, so SmartScreen may show an "unknown publisher" warning. Click "More info" → "Run anyway" to proceed.
 
@@ -71,8 +71,8 @@ chmod +x cmdv_*.AppImage
 ### Setup
 
 ```bash
-git clone https://github.com/oklar/cmdv3.git
-cd cmdv3
+git clone https://github.com/oklar/cmdv.git
+cd cmdv
 npm install
 ```
 
