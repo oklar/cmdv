@@ -116,6 +116,7 @@ mod mlock {
 pub struct VaultState {
     pub keys: Mutex<Option<AppKeys>>,
     pub monitor_stop: Arc<AtomicBool>,
+    pub setup_complete: AtomicBool,
 }
 
 impl VaultState {
@@ -123,6 +124,7 @@ impl VaultState {
         Self {
             keys: Mutex::new(None),
             monitor_stop: Arc::new(AtomicBool::new(true)),
+            setup_complete: AtomicBool::new(false),
         }
     }
 

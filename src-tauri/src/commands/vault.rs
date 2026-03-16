@@ -35,10 +35,7 @@ pub fn get_vault_status(
     vault: State<'_, Arc<VaultState>>,
     settings_db: State<'_, Arc<SettingsDb>>,
 ) -> Result<VaultStatus, String> {
-    let setup_complete = settings_db
-        .get_value("vault_setup_complete")
-        .map(|v| v == "true")
-        .unwrap_or(false);
+    let setup_complete = settings_db.get_value("vault_encrypted_master_key").is_some();
     let locked = vault.keys.lock().map_err(|_| "Lock poisoned")?.is_none();
     Ok(VaultStatus {
         setup_complete,
@@ -53,12 +50,8 @@ pub fn setup_vault(
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<SetupResult, String> {
-    if settings_db
-        .get_value("vault_setup_complete")
-        .map(|v| v == "true")
-        .unwrap_or(false)
-    {
-        return Err("Vault already set up".into());
+    if settings_db.get_value("vault_encrypted_master_key").is_some() {
+        return Err("Vault already exists".into());
     }
 
     if password.len() < 8 {
@@ -93,7 +86,6 @@ pub fn setup_vault(
     settings_db.set_value("vault_encrypted_master_key", &B64.encode(&wrapped))?;
     settings_db.set_value("vault_password_hash", &B64.encode(pw_hash))?;
     settings_db.set_value("vault_password_salt", &B64.encode(pw_salt))?;
-    settings_db.set_value("vault_setup_complete", "true")?;
 
     keychain.save_seed(master_key.as_bytes())?;
 
@@ -105,6 +97,12 @@ pub fn setup_vault(
 
     log::info!("Vault setup complete");
     Ok(SetupResult { mnemonic: words })
+}
+
+#[tauri::command]
+pub fn finish_setup(vault: State<'_, Arc<VaultState>>) {
+    vault.setup_complete.store(true, Ordering::Relaxed);
+    log::info!("Setup flow finished, auto-hide enabled");
 }
 
 #[tauri::command]
@@ -145,6 +143,7 @@ pub fn unlock_vault(
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
             start_monitoring(&vault, &db, &settings_db);
+            vault.setup_complete.store(true, Ordering::Relaxed);
             log::info!("Vault unlocked via keychain");
             Ok(())
         }
@@ -160,11 +159,7 @@ pub fn try_auto_unlock(
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<bool, String> {
-    let setup_complete = settings_db
-        .get_value("vault_setup_complete")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    if !setup_complete {
+    if settings_db.get_value("vault_encrypted_master_key").is_none() {
         return Ok(false);
     }
 
@@ -189,6 +184,7 @@ pub fn try_auto_unlock(
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
             start_monitoring(&vault, &db, &settings_db);
+            vault.setup_complete.store(true, Ordering::Relaxed);
             log::info!("Vault auto-unlocked (lock screen disabled)");
             Ok(true)
         }
@@ -283,7 +279,6 @@ pub fn reset_vault(
     }
 
     for key in &[
-        "vault_setup_complete",
         "vault_encrypted_master_key",
         "vault_password_hash",
         "vault_password_salt",

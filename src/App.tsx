@@ -53,7 +53,10 @@ export default function App() {
   }
 
   if (appState === "setup") {
-    return <SetupWizard onComplete={() => setAppState("unlocked")} />;
+    return <SetupWizard onComplete={() => {
+      invoke("finish_setup");
+      setAppState("unlocked");
+    }} />;
   }
 
   if (appState === "locked") {

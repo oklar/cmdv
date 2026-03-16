@@ -166,11 +166,14 @@ pub fn run() {
                     if SUPPRESS_BLUR_HIDE.load(Ordering::Relaxed) {
                         return;
                     }
-                    let vault_unlocked = handle
+                    let should_hide = handle
                         .try_state::<Arc<VaultState>>()
-                        .map(|v| v.keys.lock().map(|g| g.is_some()).unwrap_or(false))
+                        .map(|v| {
+                            v.keys.lock().map(|g| g.is_some()).unwrap_or(false)
+                                && v.setup_complete.load(Ordering::Relaxed)
+                        })
                         .unwrap_or(false);
-                    if !vault_unlocked {
+                    if !should_hide {
                         return;
                     }
                     if let Some(w) = handle.get_webview_window("main") {
@@ -198,6 +201,7 @@ pub fn run() {
             commands::settings::update_settings,
             commands::vault::get_vault_status,
             commands::vault::setup_vault,
+            commands::vault::finish_setup,
             commands::vault::unlock_vault,
             commands::vault::try_auto_unlock,
             commands::vault::recover_vault,
