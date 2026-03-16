@@ -121,6 +121,13 @@ impl SettingsDb {
         .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    pub fn delete_value(&self, key: &str) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM settings WHERE key = ?1", params![key])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -288,7 +288,7 @@ pub fn reset_vault(
         "auth_has_subscription",
         "last_sync_at",
     ] {
-        settings_db.set_value(key, "").ok();
+        settings_db.delete_value(key).ok();
     }
 
     log::info!("Vault reset complete — exiting app");
