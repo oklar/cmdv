@@ -55,6 +55,7 @@ fn hide_to_tray(
     }
 
     let unlocked = vault.keys.lock().map(|g| g.is_some()).unwrap_or(false);
+    let setup_done = vault.setup_complete.load(std::sync::atomic::Ordering::Relaxed);
 
     if !unlocked {
         if let Some(tray) = app.tray_by_id("main") {
@@ -65,6 +66,18 @@ fn hide_to_tray(
             .summary("Setup incomplete")
             .appname("CMDV")
             .body("Setup is incomplete. Click the tray icon to continue.")
+            .auto_icon()
+            .timeout(10000)
+            .show();
+    } else if !setup_done {
+        if let Some(tray) = app.tray_by_id("main") {
+            let _ = tray.set_tooltip(Some("CMDV — Save your recovery phrase. Click to continue."));
+        }
+
+        let _ = notify_rust::Notification::new()
+            .summary("Save your recovery phrase")
+            .appname("CMDV")
+            .body("Store it safely, then click the tray icon to continue setup.")
             .auto_icon()
             .timeout(10000)
             .show();
