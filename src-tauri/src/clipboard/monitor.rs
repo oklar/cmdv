@@ -27,6 +27,26 @@ impl ClipboardMonitor {
         self
     }
 
+    pub fn seed_from_clipboard(&mut self, hash_key: &[u8; 32]) {
+        let Ok(mut clipboard) = Clipboard::new() else {
+            return;
+        };
+
+        if let Ok(text) = clipboard.get_text() {
+            if !text.is_empty() {
+                self.last_text_hash =
+                    Some(crypto::hash::keyed_hash(hash_key, text.as_bytes()));
+            }
+        }
+
+        if let Ok(image_data) = clipboard.get_image() {
+            if !image_data.bytes.is_empty() {
+                self.last_image_hash =
+                    Some(crypto::hash::keyed_hash(hash_key, &image_data.bytes));
+            }
+        }
+    }
+
     pub fn poll_once(
         &mut self,
         db: &Database,

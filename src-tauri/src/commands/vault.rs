@@ -453,6 +453,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
 
     std::thread::spawn(move || {
         let mut monitor = clipboard::ClipboardMonitor::new().with_excluded_apps(excluded_apps);
+        monitor.seed_from_clipboard(&hash_key);
         let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
             match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
