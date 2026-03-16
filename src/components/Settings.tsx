@@ -176,7 +176,9 @@ export function Settings() {
 
       <AboutSection />
 
-      <DevSection settings={settings} onSaveSettings={saveSettings} />
+      {import.meta.env.DEV && (
+        <DevSection settings={settings} onSaveSettings={saveSettings} />
+      )}
     </div>
   );
 }
