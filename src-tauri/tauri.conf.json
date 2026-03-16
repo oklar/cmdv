@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "cmdv",
+  "productName": "Cmdv",
   "version": "0.1.0",
   "identifier": "to.cmdv.clipboard",
   "build": {
