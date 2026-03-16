@@ -65,11 +65,11 @@ export function Settings() {
     : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
       {stats && (
         <section>
-          <h2 className="text-sm font-medium text-zinc-300 mb-3">Storage</h2>
-          <div className="bg-zinc-900 rounded-lg p-4 space-y-2">
+          <h2 className="text-sm font-medium text-zinc-300 mb-2">Storage</h2>
+          <div className="bg-zinc-900 rounded-md p-3 space-y-2">
             <div className="flex justify-between text-xs text-zinc-400">
               <span>{stats.total_entries} entries</span>
               <span>
@@ -79,7 +79,7 @@ export function Settings() {
             </div>
             <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all bg-gradient-to-r from-blue-500 to-blue-400"
+                className="h-full rounded-full transition-all bg-gradient-to-r from-lime-500 to-lime-400"
                 style={{ width: `${Math.min(usagePercent, 100)}%` }}
               />
             </div>
@@ -88,8 +88,8 @@ export function Settings() {
       )}
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-3">Security</h2>
-        <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+        <h2 className="text-sm font-medium text-zinc-300 mb-2">Security</h2>
+        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
           <SettingRow
             label="Device pairing"
             description="Transfer recovery phrase via QR code"
@@ -113,7 +113,7 @@ export function Settings() {
                 })
               }
               className={`relative w-10 h-5 rounded-full transition-colors ${
-                settings.require_password_on_open ? "bg-blue-600" : "bg-zinc-700"
+                settings.require_password_on_open ? "bg-lime-500" : "bg-zinc-700"
               }`}
             >
               <span
@@ -127,8 +127,8 @@ export function Settings() {
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-3">Data</h2>
-        <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+        <h2 className="text-sm font-medium text-zinc-300 mb-2">Data</h2>
+        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
           <SettingRow label="Export" description="Save encrypted backup">
             <button
               onClick={async () => {
@@ -222,8 +222,8 @@ function DevSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-3">Developer</h2>
-      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+      <h2 className="text-sm font-medium text-zinc-300 mb-2">Developer</h2>
+      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
         <SettingRow label="Poll interval" description="How often to check clipboard">
           <select
             value={settings.poll_interval_ms}
@@ -280,7 +280,7 @@ function DevSection({
             <option value={0}>Never</option>
           </select>
         </SettingRow>
-        <div className="px-4 py-3 flex items-center justify-between">
+        <div className="px-3 py-2.5 flex items-center justify-between">
           <div>
             <div className="text-sm text-zinc-300">Clear all entries</div>
             <div className="text-xs text-zinc-500">
@@ -298,7 +298,7 @@ function DevSection({
             {confirming === "clear" ? "Confirm" : "Clear"}
           </button>
         </div>
-        <div className="px-4 py-3 flex items-center justify-between">
+        <div className="px-3 py-2.5 flex items-center justify-between">
           <div>
             <div className="text-sm text-red-400">Reset vault</div>
             <div className="text-xs text-zinc-500">
@@ -357,15 +357,15 @@ function AboutSection() {
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-3">About</h2>
-      <div className="bg-zinc-900 rounded-lg divide-y divide-zinc-800">
+      <h2 className="text-sm font-medium text-zinc-300 mb-2">About</h2>
+      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
         <SettingRow label="Version" description={version || "..."}>
           <button
             onClick={checkForUpdate}
             disabled={updateStatus === "checking" || updateStatus === "downloading"}
             className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
               updateStatus === "up-to-date"
-                ? "bg-emerald-900/40 text-emerald-400"
+                ? "bg-lime-900/40 text-lime-400"
                 : updateStatus === "error"
                   ? "bg-red-900/40 text-red-400"
                   : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
@@ -375,7 +375,7 @@ function AboutSection() {
           </button>
         </SettingRow>
         {(updateStatus === "checking" || updateStatus === "downloading") && (
-          <div className="px-4 py-2 text-xs text-zinc-500">
+          <div className="px-3 py-2 text-xs text-zinc-500">
             The app will relaunch if an update is installed.
           </div>
         )}
@@ -394,7 +394,7 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3">
+    <div className="flex items-center justify-between px-3 py-2.5">
       <div>
         <div className="text-sm text-zinc-300">{label}</div>
         <div className="text-xs text-zinc-500">{description}</div>

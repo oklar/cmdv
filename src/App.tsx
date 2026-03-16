@@ -7,6 +7,7 @@ import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { SetupWizard } from "./components/SetupWizard";
 import { AppLock } from "./components/AppLock";
+import appIcon from "./assets/icon.png";
 
 type AppState = "loading" | "setup" | "locked" | "unlocked";
 type View = "clipboard" | "settings";
@@ -53,10 +54,14 @@ export default function App() {
   }
 
   if (appState === "setup") {
-    return <SetupWizard onComplete={() => {
-      invoke("finish_setup");
-      setAppState("unlocked");
-    }} />;
+    return (
+      <SetupWizard
+        onComplete={() => {
+          invoke("finish_setup");
+          setAppState("unlocked");
+        }}
+      />
+    );
   }
 
   if (appState === "locked") {
@@ -67,13 +72,18 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <div
         data-tauri-drag-region
-        className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-10"
+        className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-10"
       >
-        <h1 className="text-lg font-semibold tracking-tight select-none pointer-events-none">CMDV</h1>
+        <div className="flex items-center gap-2 select-none pointer-events-none">
+          <img src={appIcon} alt="" className="w-8 h-8" />
+          <h1 className="text-lg font-semibold tracking-tight">CMDV</h1>
+        </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setView(view === "settings" ? "clipboard" : "settings")}
-            className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
+            onClick={() =>
+              setView(view === "settings" ? "clipboard" : "settings")
+            }
+            className="p-2 rounded-md hover:bg-zinc-800 transition-colors"
             title="Settings"
           >
             <svg
@@ -99,10 +109,20 @@ export default function App() {
           </button>
           <button
             onClick={() => invoke("hide_to_tray")}
-            className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="p-2 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
             title="Hide to tray"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>

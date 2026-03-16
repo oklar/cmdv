@@ -26,7 +26,7 @@ export function SearchBar({
     return () => window.removeEventListener("focus", onFocus);
   }, []);
   return (
-    <div className="px-4 py-3 border-b border-zinc-800 space-y-2">
+    <div className="px-3 py-2 border-b border-zinc-800 space-y-2">
       <div className="relative">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
@@ -49,7 +49,7 @@ export function SearchBar({
           placeholder="Search clipboard history..."
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-colors"
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-md pl-10 pr-4 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-colors"
         />
       </div>
       <div className="flex gap-2">
@@ -61,7 +61,7 @@ export function SearchBar({
             }
             className={`px-3 py-1 text-xs rounded-full transition-colors ${
               (type_ === "all" && !filterType) || filterType === type_
-                ? "bg-zinc-100 text-zinc-900"
+                ? "bg-zinc-700 text-zinc-100"
                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
             }`}
           >

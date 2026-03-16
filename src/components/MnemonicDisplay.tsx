@@ -41,7 +41,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   };
 
   return (
-    <div className="space-y-6 max-w-md mx-auto p-6">
+    <div className="space-y-4 max-w-md mx-auto p-6">
       <div>
         <h2 className="text-xl font-bold text-zinc-100">
           Your Recovery Phrase
@@ -53,7 +53,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
         </p>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3">
         <div className="grid grid-cols-3 gap-2">
           {words.map((word, i) => (
             <div key={i} className="flex items-center gap-2 py-1">
@@ -70,26 +70,26 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
         <button
           onClick={() => handleSave("pdf")}
           disabled={saving}
-          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
         >
           Save as PDF
         </button>
         <button
           onClick={() => handleSave("txt")}
           disabled={saving}
-          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
         >
           Save as Text
         </button>
         <button
           onClick={handleCopy}
-          className="flex-1 py-2 text-sm font-medium rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
         >
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-3">
         <p className="text-amber-400 text-xs">
           If you lose these words and all your devices, your synced data cannot
           be recovered. CMDV support cannot help — this is by design for your
@@ -102,7 +102,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
           type="checkbox"
           checked={confirmed}
           onChange={(e) => setConfirmed(e.target.checked)}
-          className="mt-0.5 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500"
+          className="mt-0.5 rounded border-zinc-600 bg-zinc-800 text-lime-500 focus:ring-lime-500"
         />
         <span className="text-sm text-zinc-400">
           I have written down my recovery phrase and stored it safely.
@@ -112,7 +112,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
       <button
         onClick={onConfirm}
         disabled={!confirmed}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-lg transition-colors"
+        className="w-full py-2.5 bg-lime-600 hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-md transition-colors"
       >
         Continue
       </button>

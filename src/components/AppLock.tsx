@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import appIcon from "../assets/icon.png";
 
 interface AppLockProps {
   onUnlock: () => void;
@@ -63,11 +64,11 @@ export function AppLock({ onUnlock }: AppLockProps) {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
-      <div data-tauri-drag-region className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
+      <div data-tauri-drag-region className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
         <span className="text-sm font-medium text-zinc-400 pointer-events-none select-none">CMDV</span>
         <button
           onClick={() => invoke("hide_to_tray")}
-          className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="p-2 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
           title="Hide to tray"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -76,24 +77,10 @@ export function AppLock({ onUnlock }: AppLockProps) {
           </svg>
         </button>
       </div>
-      <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-sm w-full space-y-8">
+      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="max-w-sm w-full space-y-6">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center mx-auto mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="text-zinc-500"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
+          <img src={appIcon} alt="Cmdv" className="w-12 h-12 mx-auto mb-3" />
           <h1 className="text-lg font-semibold text-zinc-100">
             CMDV is locked
           </h1>
@@ -114,7 +101,7 @@ export function AppLock({ onUnlock }: AppLockProps) {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             autoFocus
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500"
           />
 
           {recoveryMode && (
@@ -123,7 +110,7 @@ export function AppLock({ onUnlock }: AppLockProps) {
               onChange={(e) => setMnemonic(e.target.value)}
               placeholder="Enter your 24-word recovery phrase, separated by spaces"
               rows={4}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 text-sm font-mono resize-none"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-lime-500 focus:border-lime-500 text-sm font-mono resize-none"
             />
           )}
 
@@ -134,7 +121,7 @@ export function AppLock({ onUnlock }: AppLockProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 disabled:text-zinc-700 text-zinc-200 font-medium rounded-lg transition-colors"
+            className="w-full py-2.5 bg-lime-600 hover:bg-lime-500 disabled:bg-zinc-900 disabled:text-zinc-700 text-white font-medium rounded-md transition-colors"
           >
             {loading
               ? recoveryMode

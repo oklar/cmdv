@@ -63,8 +63,8 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   return (
     <div
       ref={ref}
-      className={`group px-4 py-3 border-b border-zinc-800/50 transition-colors ${
-        isSelected ? "bg-zinc-800/70 ring-1 ring-zinc-600" : "hover:bg-zinc-900/50"
+      className={`group px-3 py-2 border-b border-zinc-800/50 transition-colors ${
+        isSelected ? "bg-zinc-800/70 ring-1 ring-lime-500/40" : "hover:bg-zinc-900/50"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -85,26 +85,26 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
               {displayContent()}
             </p>
           )}
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-xs text-zinc-500">{formatTime(lastUsedAt)}</span>
-            <span className="text-xs text-zinc-600">·</span>
-            <span className="text-xs text-zinc-500">{formatSize(sizeBytes)}</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[11px] text-zinc-500">{formatTime(lastUsedAt)}</span>
+            <span className="text-[11px] text-zinc-600">·</span>
+            <span className="text-[11px] text-zinc-500">{formatSize(sizeBytes)}</span>
             {contentType === "image" && (
               <>
-                <span className="text-xs text-zinc-600">·</span>
-                <span className="text-xs text-blue-400">Image</span>
+                <span className="text-[11px] text-zinc-600">·</span>
+                <span className="text-[11px] text-lime-400">Image</span>
               </>
             )}
             {isSensitive && (
               <>
-                <span className="text-xs text-zinc-600">·</span>
-                <span className="text-xs text-red-400">Sensitive</span>
+                <span className="text-[11px] text-zinc-600">·</span>
+                <span className="text-[11px] text-red-400">Sensitive</span>
               </>
             )}
             {sourceApp && (
               <>
-                <span className="text-xs text-zinc-600">·</span>
-                <span className="text-xs text-zinc-500">{sourceApp}</span>
+                <span className="text-[11px] text-zinc-600">·</span>
+                <span className="text-[11px] text-zinc-500">{sourceApp}</span>
               </>
             )}
           </div>
