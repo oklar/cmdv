@@ -26,11 +26,7 @@ pub struct StatsView {
 fn make_preview(content: &[u8], content_type: &EntryType) -> Option<String> {
     match content_type {
         EntryType::Text => String::from_utf8(content.to_vec()).ok().map(|s| {
-            if s.len() > 200 {
-                s[..200].to_string()
-            } else {
-                s
-            }
+            s.chars().take(200).collect::<String>()
         }),
         EntryType::Image => {
             use base64::Engine;
@@ -186,4 +182,37 @@ pub fn copy_entry_to_clipboard(
     db.touch_entry(&id).map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_preview_truncates_utf8_at_char_boundary() {
+        // Text where byte 200 would split multi-byte 'ệ' (bytes 199..202) - previously panicked
+        let text = "Latviski Lietuviškai македонски Melayu Norsk Polski Português Româna Pyccкий Српски Slovenčina Slovenščina Español Svenska ไทย Türkçe Українська Tiếng Việt Lorem Ipsum";
+        let content = text.as_bytes();
+        let preview = make_preview(content, &EntryType::Text);
+        assert!(preview.is_some());
+        let p = preview.unwrap();
+        assert!(p.chars().count() <= 200);
+        assert!(p.is_char_boundary(p.len()) || p.len() == 0);
+    }
+
+    #[test]
+    fn make_preview_short_text_unchanged() {
+        let text = "hello";
+        let content = text.as_bytes();
+        let preview = make_preview(content, &EntryType::Text);
+        assert_eq!(preview.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn make_preview_long_ascii_truncates_to_200_chars() {
+        let text = "a".repeat(300);
+        let content = text.as_bytes();
+        let preview = make_preview(content, &EntryType::Text);
+        assert_eq!(preview.as_ref().map(|s| s.len()), Some(200));
+    }
 }
