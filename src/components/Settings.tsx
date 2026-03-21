@@ -4,6 +4,7 @@ import { save, open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { QrPairing } from "./QrPairing";
 
 interface AppSettings {
@@ -27,10 +28,12 @@ export function Settings() {
     total_size_bytes: number;
     max_size_bytes: number;
   } | null>(null);
+  const [loginAutostartEnabled, setLoginAutostartEnabled] = useState(false);
 
   useEffect(() => {
     invoke<AppSettings>("get_settings").then(setSettings).catch(console.error);
     invoke<typeof stats>("get_stats").then(setStats).catch(console.error);
+    isEnabled().then(setLoginAutostartEnabled).catch(() => {});
   }, []);
 
   const saveSettings = async (updated: AppSettings) => {
@@ -119,6 +122,42 @@ export function Settings() {
               <span
                 className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
                   settings.require_password_on_open ? "translate-x-5" : ""
+                }`}
+              />
+            </button>
+          </SettingRow>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-zinc-300 mb-2">Startup</h2>
+        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+          <SettingRow
+            label="Open at login (minimized to tray)"
+            description="Register Cmdv to start when you sign in; opens in the tray with a notification"
+          >
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  if (loginAutostartEnabled) {
+                    await disable();
+                    setLoginAutostartEnabled(false);
+                  } else {
+                    await enable();
+                    setLoginAutostartEnabled(true);
+                  }
+                } catch (err) {
+                  console.error("Autostart failed:", err);
+                }
+              }}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                loginAutostartEnabled ? "bg-lime-500" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  loginAutostartEnabled ? "translate-x-5" : ""
                 }`}
               />
             </button>

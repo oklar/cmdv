@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import { ClipboardList } from "./components/ClipboardList";
@@ -17,6 +17,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const autostartTrayAppliedRef = useRef(false);
 
   useEffect(() => {
     invoke<{ setup_complete: boolean; locked: boolean }>("get_vault_status")
@@ -41,6 +42,13 @@ export default function App() {
         await invoke("notify_update_available", { version: update.version });
       })
       .catch(() => {});
+  }, [appState]);
+
+  useEffect(() => {
+    if (appState !== "unlocked") return;
+    if (autostartTrayAppliedRef.current) return;
+    autostartTrayAppliedRef.current = true;
+    invoke("apply_autostart_tray").catch(() => {});
   }, [appState]);
 
   if (appState === "loading") {

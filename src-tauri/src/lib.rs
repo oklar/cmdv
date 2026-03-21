@@ -8,7 +8,7 @@ pub mod storage;
 pub mod sync;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
@@ -17,6 +17,14 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_positioner::{Position, WindowExt};
 
 static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
+
+/// Set when the process was started with `--tray` (e.g. OS login autostart entry).
+static LAUNCHED_WITH_TRAY: OnceLock<bool> = OnceLock::new();
+static AUTOSTART_TRAY_APPLIED: AtomicBool = AtomicBool::new(false);
+
+fn launched_with_tray() -> bool {
+    *LAUNCHED_WITH_TRAY.get_or_init(|| std::env::args().any(|a| a == "--tray"))
+}
 
 use crypto::keys::VaultState;
 
@@ -102,9 +110,44 @@ fn notify_update_available(version: String) -> Result<(), String> {
     Ok(())
 }
 
+/// After vault unlock: hide main window once and notify, only if we were started with `--tray`.
+#[tauri::command]
+fn apply_autostart_tray(app: tauri::AppHandle) -> Result<(), String> {
+    if !launched_with_tray() {
+        return Ok(());
+    }
+    if AUTOSTART_TRAY_APPLIED.swap(true, Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+
+    notify_rust::Notification::new()
+        .summary("Cmdv")
+        .appname("CMDV")
+        .body("Running in the system tray — click the icon to open.")
+        .auto_icon()
+        .timeout(15_000)
+        .show()
+        .map_err(|e| e.to_string())?;
+
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some("CMDV Clipboard Manager"));
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .args(["--tray"])
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
@@ -220,6 +263,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             hide_to_tray,
             notify_update_available,
+            apply_autostart_tray,
             commands::clipboard::get_entries,
             commands::clipboard::search_entries,
             commands::clipboard::toggle_favorite,
