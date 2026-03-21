@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { ClipboardList } from "./components/ClipboardList";
 import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
@@ -39,8 +38,7 @@ export default function App() {
     check()
       .then(async (update) => {
         if (!update) return;
-        await update.downloadAndInstall();
-        await relaunch();
+        await invoke("notify_update_available", { version: update.version });
       })
       .catch(() => {});
   }, [appState]);

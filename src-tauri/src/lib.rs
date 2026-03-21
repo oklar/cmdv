@@ -86,6 +86,22 @@ fn hide_to_tray(
     Ok(())
 }
 
+/// Shown when `check()` finds a newer version on startup (does not install automatically).
+#[tauri::command]
+fn notify_update_available(version: String) -> Result<(), String> {
+    notify_rust::Notification::new()
+        .summary("Update available")
+        .appname("CMDV")
+        .body(&format!(
+            "Version {version} is ready. Install it from Settings."
+        ))
+        .auto_icon()
+        .timeout(15_000)
+        .show()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -203,6 +219,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             hide_to_tray,
+            notify_update_available,
             commands::clipboard::get_entries,
             commands::clipboard::search_entries,
             commands::clipboard::toggle_favorite,
