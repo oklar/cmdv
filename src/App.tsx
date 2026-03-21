@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { check } from "@tauri-apps/plugin-updater";
 import { ClipboardList } from "./components/ClipboardList";
 import { SearchBar } from "./components/SearchBar";
@@ -10,6 +11,8 @@ import appIcon from "./assets/icon.png";
 
 type AppState = "loading" | "setup" | "locked" | "unlocked";
 type View = "clipboard" | "settings";
+
+type AppSettingsAutostart = { login_autostart: boolean };
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>("loading");
@@ -49,6 +52,20 @@ export default function App() {
     if (autostartTrayAppliedRef.current) return;
     autostartTrayAppliedRef.current = true;
     invoke("apply_autostart_tray").catch(() => {});
+  }, [appState]);
+
+  useEffect(() => {
+    if (appState !== "unlocked") return;
+    (async () => {
+      try {
+        const s = await invoke<AppSettingsAutostart>("get_settings");
+        if (!s.login_autostart) return;
+        const on = await isEnabled();
+        if (!on) await enable();
+      } catch {
+        /* ignore */
+      }
+    })();
   }, [appState]);
 
   if (appState === "loading") {

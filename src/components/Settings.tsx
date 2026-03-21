@@ -18,6 +18,7 @@ interface AppSettings {
   sync_sensitive: boolean;
   mode: "local" | "cloud";
   require_password_on_open: boolean;
+  login_autostart: boolean;
 }
 
 export function Settings() {
@@ -143,9 +144,17 @@ export function Settings() {
                   if (loginAutostartEnabled) {
                     await disable();
                     setLoginAutostartEnabled(false);
+                    await saveSettings({
+                      ...settings,
+                      login_autostart: false,
+                    });
                   } else {
                     await enable();
                     setLoginAutostartEnabled(true);
+                    await saveSettings({
+                      ...settings,
+                      login_autostart: true,
+                    });
                   }
                 } catch (err) {
                   console.error("Autostart failed:", err);
