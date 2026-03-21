@@ -18,7 +18,6 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
 
-/// Set when the process was started with `--tray` (e.g. OS login autostart entry).
 static LAUNCHED_WITH_TRAY: OnceLock<bool> = OnceLock::new();
 static AUTOSTART_TRAY_APPLIED: AtomicBool = AtomicBool::new(false);
 
@@ -110,7 +109,6 @@ fn notify_update_available(version: String) -> Result<(), String> {
     Ok(())
 }
 
-/// After vault unlock: hide main window once and notify, only if we were started with `--tray`.
 #[tauri::command]
 fn apply_autostart_tray(app: tauri::AppHandle) -> Result<(), String> {
     if !launched_with_tray() {

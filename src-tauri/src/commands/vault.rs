@@ -100,16 +100,9 @@ pub fn setup_vault(
 }
 
 #[tauri::command]
-pub fn finish_setup(
-    vault: State<'_, Arc<VaultState>>,
-    settings_db: State<'_, Arc<SettingsDb>>,
-) -> Result<(), String> {
+pub fn finish_setup(vault: State<'_, Arc<VaultState>>) {
     vault.setup_complete.store(true, Ordering::Relaxed);
-    let mut s = settings_db.get_settings();
-    s.login_autostart = true;
-    settings_db.save_settings(&s)?;
-    log::info!("Setup flow finished, login autostart preference saved");
-    Ok(())
+    log::info!("Setup flow finished, auto-hide enabled");
 }
 
 #[tauri::command]

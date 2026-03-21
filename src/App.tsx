@@ -62,9 +62,7 @@ export default function App() {
         if (!s.login_autostart) return;
         const on = await isEnabled();
         if (!on) await enable();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
   }, [appState]);
 
@@ -79,12 +77,8 @@ export default function App() {
   if (appState === "setup") {
     return (
       <SetupWizard
-        onComplete={async () => {
-          try {
-            await invoke("finish_setup");
-          } catch (e) {
-            console.error(e);
-          }
+        onComplete={() => {
+          invoke("finish_setup");
           setAppState("unlocked");
         }}
       />
