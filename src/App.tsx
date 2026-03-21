@@ -79,8 +79,12 @@ export default function App() {
   if (appState === "setup") {
     return (
       <SetupWizard
-        onComplete={() => {
-          invoke("finish_setup");
+        onComplete={async () => {
+          try {
+            await invoke("finish_setup");
+          } catch (e) {
+            console.error(e);
+          }
           setAppState("unlocked");
         }}
       />
