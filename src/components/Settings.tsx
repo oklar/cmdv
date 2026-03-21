@@ -374,11 +374,9 @@ function AboutSection() {
             {statusLabel[updateStatus]}
           </button>
         </SettingRow>
-        {(updateStatus === "checking" || updateStatus === "downloading") && (
-          <div className="px-3 py-2 text-xs text-zinc-500">
-            The app will relaunch if an update is installed.
-          </div>
-        )}
+        <div className="px-3 py-2 text-xs text-zinc-500">
+          The app will relaunch if an update is installed.
+        </div>
       </div>
     </section>
   );
