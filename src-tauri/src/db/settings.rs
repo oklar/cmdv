@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
 
+fn default_login_autostart_on() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub poll_interval_ms: u64,
@@ -15,8 +19,8 @@ pub struct AppSettings {
     pub sync_sensitive: bool,
     pub mode: AppMode,
     pub require_password_on_open: bool,
-    /// Open at login (minimized to tray). Enabled when setup finishes; absent in old JSON deserializes as false.
-    #[serde(default)]
+    /// Open at login with `--tray` (minimized to tray + notification). On by default; old JSON without this field deserializes as on.
+    #[serde(default = "default_login_autostart_on")]
     pub login_autostart: bool,
 }
 
@@ -46,7 +50,7 @@ impl Default for AppSettings {
             sync_sensitive: false,
             mode: AppMode::Local,
             require_password_on_open: false,
-            login_autostart: false,
+            login_autostart: true,
         }
     }
 }
@@ -144,7 +148,15 @@ mod tests {
         let settings = db.get_settings();
         assert_eq!(settings.poll_interval_ms, 1000);
         assert_eq!(settings.mode, AppMode::Local);
-        assert!(!settings.login_autostart);
+        assert!(settings.login_autostart);
+    }
+
+    #[test]
+    fn legacy_settings_json_without_login_autostart_defaults_on() {
+        let db = SettingsDb::open_in_memory().unwrap();
+        let legacy = r#"{"poll_interval_ms":1000,"max_entry_size_bytes":5242880,"max_total_size_bytes":52428800,"sensitive_auto_expire_secs":300,"sync_interval_secs":30,"webp_quality":100.0,"excluded_apps":[],"sync_sensitive":false,"mode":"local","require_password_on_open":false}"#;
+        db.set_value("app_settings", legacy).unwrap();
+        assert!(db.get_settings().login_autostart);
     }
 
     #[test]
