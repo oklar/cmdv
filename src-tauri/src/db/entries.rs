@@ -195,6 +195,14 @@ pub fn touch_entry(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+pub fn touch_entry_by_hash(conn: &Connection, hash: &[u8]) -> Result<bool, rusqlite::Error> {
+    let updated = conn.execute(
+        "UPDATE entries SET last_used_at = datetime('now') WHERE content_hash = ?1",
+        params![hash],
+    )?;
+    Ok(updated > 0)
+}
+
 pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes

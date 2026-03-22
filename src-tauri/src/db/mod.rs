@@ -131,6 +131,11 @@ impl Database {
         entries::touch_entry(guard.as_ref().unwrap(), id)
     }
 
+    pub fn touch_entry_by_hash(&self, hash: &[u8]) -> Result<bool, rusqlite::Error> {
+        let guard = self.conn()?;
+        entries::touch_entry_by_hash(guard.as_ref().unwrap(), hash)
+    }
+
     pub fn get_all_entries(&self) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
         let guard = self.conn()?;
         entries::get_all_entries(guard.as_ref().unwrap())

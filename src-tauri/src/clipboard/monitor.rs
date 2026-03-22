@@ -76,7 +76,7 @@ impl ClipboardMonitor {
             }
 
             if db
-                .entry_exists_by_hash(&content_hash)
+                .touch_entry_by_hash(&content_hash)
                 .map_err(|e| e.to_string())?
             {
                 self.last_text_hash = Some(content_hash);
@@ -110,7 +110,7 @@ impl ClipboardMonitor {
             }
 
             if db
-                .entry_exists_by_hash(&content_hash)
+                .touch_entry_by_hash(&content_hash)
                 .map_err(|e| e.to_string())?
             {
                 self.last_image_hash = Some(content_hash);
