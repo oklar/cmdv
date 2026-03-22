@@ -112,7 +112,9 @@ export function Settings() {
                 })
               }
               className={`relative w-10 h-5 rounded-full transition-colors ${
-                settings.require_password_on_open ? "bg-lime-500" : "bg-zinc-700"
+                settings.require_password_on_open
+                  ? "bg-lime-500"
+                  : "bg-zinc-700"
               }`}
             >
               <span
@@ -175,7 +177,9 @@ export function Settings() {
                 });
                 if (path) {
                   try {
-                    const count = await invoke<number>("export_database", { path });
+                    const count = await invoke<number>("export_database", {
+                      path,
+                    });
                     alert(`Exported ${count} entries`);
                   } catch (err) {
                     alert(String(err));
@@ -196,7 +200,9 @@ export function Settings() {
                 });
                 if (path) {
                   try {
-                    const count = await invoke<number>("import_database", { path });
+                    const count = await invoke<number>("import_database", {
+                      path,
+                    });
                     alert(`Imported ${count} new entries`);
                   } catch (err) {
                     alert(String(err));
@@ -261,7 +267,10 @@ function DevSection({
     <section>
       <h2 className="text-sm font-medium text-zinc-300 mb-2">Developer</h2>
       <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
-        <SettingRow label="Poll interval" description="How often to check clipboard">
+        <SettingRow
+          label="Poll interval"
+          description="How often to check clipboard"
+        >
           <select
             value={settings.poll_interval_ms}
             onChange={(e) =>
@@ -278,7 +287,10 @@ function DevSection({
             <option value={5000}>5s</option>
           </select>
         </SettingRow>
-        <SettingRow label="WebP quality" description="Image compression quality">
+        <SettingRow
+          label="WebP quality"
+          description="Image compression quality"
+        >
           <input
             type="range"
             min="50"
@@ -340,11 +352,13 @@ function DevSection({
 function AboutSection() {
   const [version, setVersion] = useState("");
   const [updateStatus, setUpdateStatus] = useState<
-    "idle" | "checking" | "downloading" | "up-to-date" | "error"
+    "idle" | "checking" | "no-update" | "updating" | "error"
   >("idle");
 
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => {});
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
   }, []);
 
   const checkForUpdate = async () => {
@@ -352,26 +366,25 @@ function AboutSection() {
     try {
       const update = await check();
       if (!update) {
-        setUpdateStatus("up-to-date");
-        setTimeout(() => setUpdateStatus("idle"), 3000);
+        setUpdateStatus("no-update");
         return;
       }
-      setUpdateStatus("downloading");
+      setUpdateStatus("updating");
       await update.downloadAndInstall();
       await relaunch();
     } catch {
-      setUpdateStatus("error");
-      setTimeout(() => setUpdateStatus("idle"), 3000);
+      setUpdateStatus("no-update");
     }
   };
 
-  const statusLabel: Record<typeof updateStatus, string> = {
-    idle: "Check for updates",
-    checking: "Checking...",
-    downloading: "Updating...",
-    "up-to-date": "Up to date",
-    error: "Update failed",
-  };
+  const busy = updateStatus === "checking" || updateStatus === "updating";
+
+  const label =
+    updateStatus === "checking" ? "Checking..." :
+    updateStatus === "updating" ? "Updating..." :
+    updateStatus === "no-update" ? "No update" :
+    updateStatus === "error" ? "Try again later" :
+    "Check for updates";
 
   return (
     <section>
@@ -380,21 +393,20 @@ function AboutSection() {
         <SettingRow label="Version" description={version || "..."}>
           <button
             onClick={checkForUpdate}
-            disabled={updateStatus === "checking" || updateStatus === "downloading"}
+            disabled={busy}
             className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-              updateStatus === "up-to-date"
-                ? "bg-lime-900/40 text-lime-400"
-                : updateStatus === "error"
-                  ? "bg-red-900/40 text-red-400"
-                  : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+              busy
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                : updateStatus === "no-update"
+                  ? "bg-lime-900/40 text-lime-400"
+                  : updateStatus === "error"
+                    ? "bg-red-900/40 text-red-400"
+                    : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
             }`}
           >
-            {statusLabel[updateStatus]}
+            {label}
           </button>
         </SettingRow>
-        <div className="px-3 py-2 text-xs text-zinc-500">
-          The app will relaunch if an update is installed.
-        </div>
       </div>
     </section>
   );
