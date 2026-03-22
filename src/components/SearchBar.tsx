@@ -25,8 +25,9 @@ export function SearchBar({
     onFocus();
     return () => window.removeEventListener("focus", onFocus);
   }, []);
+
   return (
-    <div className="px-3 py-2 border-b border-zinc-800 space-y-2">
+    <div data-tauri-drag-region className="px-3 py-2 border-b border-zinc-800 space-y-2">
       <div className="relative">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
@@ -46,7 +47,7 @@ export function SearchBar({
         <input
           ref={inputRef}
           type="text"
-          placeholder="Search clipboard history..."
+          placeholder="Search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           className="w-full bg-zinc-900 border border-zinc-800 rounded-md pl-10 pr-4 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-colors"

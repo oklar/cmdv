@@ -10,6 +10,13 @@
   accent-color: #84cc16;
 }
 
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
 html, body {
   background-color: #09090b;
 }

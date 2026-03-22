@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { ClipboardList } from "./components/ClipboardList";
 import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
@@ -16,6 +17,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [version, setVersion] = useState("");
   const autostartTrayAppliedRef = useRef(false);
 
   useEffect(() => {
@@ -39,6 +41,10 @@ export default function App() {
     autostartTrayAppliedRef.current = true;
     invoke("apply_autostart_tray").catch(() => {});
   }, [appState]);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
 
   if (appState === "loading") {
     return (
@@ -64,22 +70,60 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <div
-        data-tauri-drag-region
-        className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-10"
-      >
-        <div className="flex items-center gap-2 select-none pointer-events-none">
-          <img src={appIcon} alt="" className="w-8 h-8" />
-          <h1 className="text-lg font-semibold tracking-tight">CMDV</h1>
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-row min-h-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          {view === "clipboard" ? (
+            <>
+              <SearchBar
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
+                filterType={filterType}
+                onFilterTypeChange={setFilterType}
+                favoritesOnly={favoritesOnly}
+                onFavoritesOnlyChange={setFavoritesOnly}
+              />
+              <ClipboardList
+                searchQuery={searchQuery}
+                filterType={filterType}
+                favoritesOnly={favoritesOnly}
+              />
+            </>
+          ) : (
+            <Settings />
+          )}
         </div>
-        <div className="flex items-center gap-1">
+
+        <div
+          data-tauri-drag-region
+          className="w-12 border-l border-zinc-800 flex flex-col items-center pt-2 gap-2 select-none"
+        >
+          <button
+            onClick={() => invoke("hide_to_tray")}
+            className="p-2 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Hide to tray"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <button
             onClick={() =>
               setView(view === "settings" ? "clipboard" : "settings")
             }
             className="p-2 rounded-md hover:bg-zinc-800 transition-colors"
-            title="Settings"
+            title={view === "settings" ? "Back" : "Settings"}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -102,48 +146,23 @@ export default function App() {
               )}
             </svg>
           </button>
-          <button
-            onClick={() => invoke("hide_to_tray")}
-            className="p-2 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Hide to tray"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
         </div>
       </div>
 
-      {view === "clipboard" ? (
-        <main className="flex-1 flex flex-col">
-          <SearchBar
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            filterType={filterType}
-            onFilterTypeChange={setFilterType}
-            favoritesOnly={favoritesOnly}
-            onFavoritesOnlyChange={setFavoritesOnly}
-          />
-          <ClipboardList
-            searchQuery={searchQuery}
-            filterType={filterType}
-            favoritesOnly={favoritesOnly}
-          />
-        </main>
-      ) : (
-        <Settings />
-      )}
+      <div
+        data-tauri-drag-region
+        className="flex items-center justify-between px-3 py-1.5 border-t border-zinc-800 bg-zinc-900/80 select-none"
+      >
+        <div className="flex items-center gap-2 pointer-events-none">
+          <img src={appIcon} alt="" className="w-5 h-5" />
+          <span className="text-xs font-semibold tracking-tight text-zinc-300">
+            CMDV
+          </span>
+        </div>
+        <span className="text-xs text-zinc-500 pointer-events-none">
+          {version ? `v${version}` : ""}
+        </span>
+      </div>
     </div>
   );
 }
