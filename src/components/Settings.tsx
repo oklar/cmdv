@@ -353,6 +353,7 @@ function AboutSection() {
       const update = await check();
       if (!update) {
         setUpdateStatus("up-to-date");
+        setTimeout(() => setUpdateStatus("idle"), 3000);
         return;
       }
       setUpdateStatus("downloading");
@@ -360,6 +361,7 @@ function AboutSection() {
       await relaunch();
     } catch {
       setUpdateStatus("error");
+      setTimeout(() => setUpdateStatus("idle"), 3000);
     }
   };
 
