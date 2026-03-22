@@ -88,7 +88,10 @@ export function ClipboardList({
         if (entry) handleCopyBack(entry.id);
       }
 
-      if (!searchQuery && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const activeTag = document.activeElement?.tagName;
+      const isTyping = activeTag === "INPUT" || activeTag === "TEXTAREA";
+
+      if (!isTyping && !searchQuery && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const digit = parseInt(e.key, 10);
         if (!isNaN(digit)) {
           const index = digit === 0 ? 9 : digit - 1;
