@@ -12,8 +12,7 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
             content_hash BLOB NOT NULL,
             last_used_at TEXT NOT NULL DEFAULT (datetime('now')),
             is_favorite INTEGER NOT NULL DEFAULT 0,
-            size_bytes INTEGER NOT NULL DEFAULT 0,
-            source_app TEXT
+            size_bytes INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE INDEX IF NOT EXISTS idx_entries_last_used_at ON entries(last_used_at);

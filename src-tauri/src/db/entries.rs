@@ -34,7 +34,6 @@ pub struct ClipboardEntry {
     pub last_used_at: String,
     pub is_favorite: bool,
     pub size_bytes: i64,
-    pub source_app: Option<String>,
 }
 
 pub struct NewEntry {
@@ -43,14 +42,13 @@ pub struct NewEntry {
     pub content_hash: Vec<u8>,
     pub size_bytes: i64,
     pub is_favorite: bool,
-    pub source_app: Option<String>,
 }
 
 pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusqlite::Error> {
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO entries (id, content, content_type, content_hash, is_favorite, size_bytes, source_app)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO entries (id, content, content_type, content_hash, is_favorite, size_bytes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             id,
             entry.content,
@@ -58,7 +56,6 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
             entry.content_hash,
             entry.is_favorite as i32,
             entry.size_bytes,
-            entry.source_app,
         ],
     )?;
     Ok(id)
@@ -66,7 +63,7 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
 
 pub fn get_entry(conn: &Connection, id: &str) -> Result<Option<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
          FROM entries WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id], row_to_entry)?;
@@ -81,7 +78,7 @@ pub fn get_entries(
     favorites_only: bool,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut sql = String::from(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
          FROM entries WHERE 1=1",
     );
 
@@ -111,7 +108,7 @@ pub fn search_entries(
         .replace('_', "\\_");
     let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
          FROM entries
          WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1 ESCAPE '\\'
          ORDER BY last_used_at DESC
@@ -200,7 +197,7 @@ pub fn touch_entry(conn: &Connection, id: &str) -> Result<(), rusqlite::Error> {
 
 pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, source_app
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
          FROM entries ORDER BY last_used_at ASC",
     )?;
     let entries = stmt
@@ -219,7 +216,6 @@ fn row_to_entry(row: &rusqlite::Row) -> Result<ClipboardEntry, rusqlite::Error> 
         last_used_at: row.get(4)?,
         is_favorite: row.get::<_, i32>(5)? != 0,
         size_bytes: row.get(6)?,
-        source_app: row.get(7)?,
     })
 }
 
@@ -241,7 +237,6 @@ mod tests {
             content_hash: vec![7, 8, 9],
             size_bytes: 100,
             is_favorite: false,
-            source_app: None,
         }
     }
 

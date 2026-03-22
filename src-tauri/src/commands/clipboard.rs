@@ -11,7 +11,6 @@ pub struct EntryView {
     pub last_used_at: String,
     pub is_favorite: bool,
     pub size_bytes: i64,
-    pub source_app: Option<String>,
     pub preview: Option<String>,
 }
 
@@ -71,7 +70,6 @@ pub fn get_entries(
                 last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 size_bytes: e.size_bytes,
-                source_app: e.source_app,
                 preview,
             }
         })
@@ -106,7 +104,6 @@ pub fn search_entries(
                 last_used_at: e.last_used_at,
                 is_favorite: e.is_favorite,
                 size_bytes: e.size_bytes,
-                source_app: e.source_app,
                 preview,
             }
         })

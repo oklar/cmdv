@@ -8,7 +8,6 @@ interface Entry {
   last_used_at: string;
   is_favorite: boolean;
   size_bytes: number;
-  source_app: string | null;
   preview: string | null;
 }
 
@@ -187,7 +186,6 @@ export function ClipboardList({
           lastUsedAt={entry.last_used_at}
           isFavorite={entry.is_favorite}
           sizeBytes={entry.size_bytes}
-          sourceApp={entry.source_app}
           preview={entry.preview}
           isSelected={index === selectedIndex}
           shortcutKey={shortcutKeyForIndex(index)}

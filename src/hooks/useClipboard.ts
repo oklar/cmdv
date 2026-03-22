@@ -7,7 +7,6 @@ interface Entry {
   last_used_at: string;
   is_favorite: boolean;
   size_bytes: number;
-  source_app: string | null;
   preview: string | null;
 }
 

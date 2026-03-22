@@ -89,7 +89,6 @@ impl ClipboardMonitor {
                 content_hash: content_hash.clone(),
                 size_bytes: text.len() as i64,
                 is_favorite: false,
-                source_app,
             };
 
             let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
@@ -132,7 +131,6 @@ impl ClipboardMonitor {
                 content_hash: content_hash.clone(),
                 size_bytes: webp_bytes.len() as i64,
                 is_favorite: false,
-                source_app,
             };
 
             let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;

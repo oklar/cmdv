@@ -6,7 +6,6 @@ interface EntryCardProps {
   lastUsedAt: string;
   isFavorite: boolean;
   sizeBytes: number;
-  sourceApp: string | null;
   preview: string | null;
   isSelected: boolean;
   shortcutKey: string | null;
@@ -21,7 +20,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   lastUsedAt,
   isFavorite,
   sizeBytes,
-  sourceApp,
   preview,
   isSelected,
   shortcutKey,
@@ -88,12 +86,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
               <>
                 <span className="text-[11px] text-zinc-600">·</span>
                 <span className="text-[11px] text-lime-400">Image</span>
-              </>
-            )}
-            {sourceApp && (
-              <>
-                <span className="text-[11px] text-zinc-600">·</span>
-                <span className="text-[11px] text-zinc-500">{sourceApp}</span>
               </>
             )}
           </div>
