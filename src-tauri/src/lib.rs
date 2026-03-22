@@ -3,7 +3,6 @@ pub mod commands;
 pub mod crypto;
 pub mod db;
 pub mod image;
-pub mod sensitive;
 pub mod storage;
 pub mod sync;
 

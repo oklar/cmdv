@@ -442,14 +442,12 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     let settings = settings_db.get_settings();
     let max_entry_size = settings.max_entry_size_bytes as usize;
     let max_total_size = settings.max_total_size_bytes;
-    let sensitive_expire_secs = settings.sensitive_auto_expire_secs;
     let excluded_apps = settings.excluded_apps.clone();
     let poll_db = db.clone();
 
     std::thread::spawn(move || {
         let mut monitor = clipboard::ClipboardMonitor::new().with_excluded_apps(excluded_apps);
         monitor.seed_from_clipboard(&hash_key);
-        let mut tick_count: u64 = 0;
         while !stop.load(Ordering::Relaxed) {
             match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
                 Ok(Some(id)) => {
@@ -458,16 +456,6 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
                 }
                 Ok(None) => {}
                 Err(e) => log::warn!("Clipboard poll error: {}", e),
-            }
-
-            // Every 30 seconds, expire old sensitive entries
-            tick_count += 1;
-            if tick_count % 30 == 0 && sensitive_expire_secs > 0 {
-                match poll_db.delete_expired_sensitive(sensitive_expire_secs) {
-                    Ok(n) if n > 0 => log::info!("Auto-expired {} sensitive entries", n),
-                    Err(e) => log::warn!("Sensitive expire error: {}", e),
-                    _ => {}
-                }
             }
 
             std::thread::sleep(Duration::from_secs(1));
@@ -545,7 +533,6 @@ pub fn import_database(
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,
                 is_favorite: entry.is_favorite,
-                is_sensitive: entry.is_sensitive,
                 source_app: None,
             };
             db.insert_entry(&new_entry).map_err(|e| e.to_string())?;

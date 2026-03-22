@@ -11,11 +11,9 @@ interface AppSettings {
   poll_interval_ms: number;
   max_entry_size_bytes: number;
   max_total_size_bytes: number;
-  sensitive_auto_expire_secs: number;
   sync_interval_secs: number;
   webp_quality: number;
   excluded_apps: string[];
-  sync_sensitive: boolean;
   mode: "local" | "cloud";
   require_password_on_open: boolean;
   login_autostart: boolean;
@@ -297,27 +295,6 @@ function DevSection({
           <span className="text-xs text-zinc-500 ml-2 w-8">
             {settings.webp_quality}%
           </span>
-        </SettingRow>
-        <SettingRow
-          label="Sensitive auto-expire"
-          description="Auto-delete sensitive entries after"
-        >
-          <select
-            value={settings.sensitive_auto_expire_secs}
-            onChange={(e) =>
-              onSaveSettings({
-                ...settings,
-                sensitive_auto_expire_secs: Number(e.target.value),
-              })
-            }
-            className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
-          >
-            <option value={60}>1 min</option>
-            <option value={300}>5 min</option>
-            <option value={600}>10 min</option>
-            <option value={1800}>30 min</option>
-            <option value={0}>Never</option>
-          </select>
         </SettingRow>
         <div className="px-3 py-2.5 flex items-center justify-between">
           <div>

@@ -7,7 +7,6 @@ interface Entry {
   content_type: string;
   last_used_at: string;
   is_favorite: boolean;
-  is_sensitive: boolean;
   size_bytes: number;
   source_app: string | null;
   preview: string | null;
@@ -184,7 +183,6 @@ export function ClipboardList({
           contentType={entry.content_type}
           lastUsedAt={entry.last_used_at}
           isFavorite={entry.is_favorite}
-          isSensitive={entry.is_sensitive}
           sizeBytes={entry.size_bytes}
           sourceApp={entry.source_app}
           preview={entry.preview}

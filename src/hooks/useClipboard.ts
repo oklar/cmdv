@@ -6,7 +6,6 @@ interface Entry {
   content_type: string;
   last_used_at: string;
   is_favorite: boolean;
-  is_sensitive: boolean;
   size_bytes: number;
   source_app: string | null;
   preview: string | null;

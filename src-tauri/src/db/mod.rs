@@ -126,11 +126,6 @@ impl Database {
         entries::prune_oldest_non_favorites(guard.as_ref().unwrap(), bytes_to_free)
     }
 
-    pub fn delete_expired_sensitive(&self, max_age_secs: i64) -> Result<usize, rusqlite::Error> {
-        let guard = self.conn()?;
-        entries::delete_expired_sensitive(guard.as_ref().unwrap(), max_age_secs)
-    }
-
     pub fn touch_entry(&self, id: &str) -> Result<(), rusqlite::Error> {
         let guard = self.conn()?;
         entries::touch_entry(guard.as_ref().unwrap(), id)

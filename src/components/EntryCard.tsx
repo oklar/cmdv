@@ -1,11 +1,10 @@
-import { forwardRef, useState } from "react";
+import { forwardRef } from "react";
 
 interface EntryCardProps {
   id: string;
   contentType: string;
   lastUsedAt: string;
   isFavorite: boolean;
-  isSensitive: boolean;
   sizeBytes: number;
   sourceApp: string | null;
   preview: string | null;
@@ -21,7 +20,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   contentType,
   lastUsedAt,
   isFavorite,
-  isSensitive,
   sizeBytes,
   sourceApp,
   preview,
@@ -31,8 +29,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   onDelete,
   onCopyBack,
 }, ref) {
-  const [revealed, setRevealed] = useState(false);
-
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     const now = new Date();
@@ -56,7 +52,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   const displayContent = () => {
     if (!preview) return "[No preview]";
     if (contentType === "image") return null;
-    if (isSensitive && !revealed) return "••••••••••••";
     return preview;
   };
 
@@ -95,12 +90,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
                 <span className="text-[11px] text-lime-400">Image</span>
               </>
             )}
-            {isSensitive && (
-              <>
-                <span className="text-[11px] text-zinc-600">·</span>
-                <span className="text-[11px] text-red-400">Sensitive</span>
-              </>
-            )}
             {sourceApp && (
               <>
                 <span className="text-[11px] text-zinc-600">·</span>
@@ -133,39 +122,6 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
           </button>
-
-          {isSensitive && (
-            <button
-              onClick={() => setRevealed(!revealed)}
-              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-              title={revealed ? "Hide" : "Reveal"}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                {revealed ? (
-                  <>
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </>
-                ) : (
-                  <>
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </>
-                )}
-              </svg>
-            </button>
-          )}
 
           <button
             onClick={() => onToggleFavorite(id)}

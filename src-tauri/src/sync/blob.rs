@@ -16,7 +16,6 @@ pub struct SyncEntry {
     pub content_hash: Vec<u8>,
     pub last_used_at: String,
     pub is_favorite: bool,
-    pub is_sensitive: bool,
     pub size_bytes: i64,
 }
 
@@ -29,7 +28,6 @@ impl From<&ClipboardEntry> for SyncEntry {
             content_hash: e.content_hash.clone(),
             last_used_at: e.last_used_at.clone(),
             is_favorite: e.is_favorite,
-            is_sensitive: e.is_sensitive,
             size_bytes: e.size_bytes,
         }
     }

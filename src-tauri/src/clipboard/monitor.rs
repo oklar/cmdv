@@ -3,7 +3,6 @@ use arboard::Clipboard;
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
 use crate::image as img;
-use crate::sensitive;
 
 use super::source;
 
@@ -53,10 +52,6 @@ impl ClipboardMonitor {
         hash_key: &[u8; 32],
         max_entry_size: usize,
     ) -> Result<Option<String>, String> {
-        if sensitive::flags::is_clipboard_concealed() {
-            return Ok(None);
-        }
-
         let source_app = source::get_foreground_app();
         if let Some(ref app) = source_app {
             if source::is_excluded_with_custom(app, &self.excluded_apps) {
@@ -88,15 +83,12 @@ impl ClipboardMonitor {
                 return Ok(None);
             }
 
-            let is_sensitive = sensitive::detect::is_sensitive(&text);
-
             let entry = NewEntry {
                 content: text.as_bytes().to_vec(),
                 content_type: EntryType::Text,
                 content_hash: content_hash.clone(),
                 size_bytes: text.len() as i64,
                 is_favorite: false,
-                is_sensitive,
                 source_app,
             };
 
@@ -140,7 +132,6 @@ impl ClipboardMonitor {
                 content_hash: content_hash.clone(),
                 size_bytes: webp_bytes.len() as i64,
                 is_favorite: false,
-                is_sensitive: false,
                 source_app,
             };
 
