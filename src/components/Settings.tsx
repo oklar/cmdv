@@ -139,10 +139,12 @@ export function Settings() {
               onClick={async () => {
                 try {
                   const next = !settings.login_autostart;
-                  if (next) {
-                    await enable();
-                  } else {
-                    await disable();
+                  if (!import.meta.env.DEV) {
+                    if (next) {
+                      await enable();
+                    } else {
+                      await disable();
+                    }
                   }
                   await saveSettings({ ...settings, login_autostart: next });
                 } catch (err) {

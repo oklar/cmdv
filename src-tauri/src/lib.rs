@@ -216,11 +216,13 @@ pub fn run() {
             let settings_db =
                 db::settings::SettingsDb::open(&settings_file).expect("failed to open settings db");
 
-            let s = settings_db.get_settings();
-            if s.login_autostart {
-                let _ = app.autolaunch().enable();
-            } else {
-                let _ = app.autolaunch().disable();
+            if !cfg!(debug_assertions) {
+                let s = settings_db.get_settings();
+                if s.login_autostart {
+                    let _ = app.autolaunch().enable();
+                } else {
+                    let _ = app.autolaunch().disable();
+                }
             }
 
             app.manage(Arc::new(settings_db));
