@@ -15,6 +15,7 @@ pub struct AppSettings {
     pub sync_sensitive: bool,
     pub mode: AppMode,
     pub require_password_on_open: bool,
+    pub login_autostart: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +44,7 @@ impl Default for AppSettings {
             sync_sensitive: false,
             mode: AppMode::Local,
             require_password_on_open: false,
+            login_autostart: true,
         }
     }
 }
@@ -140,6 +142,7 @@ mod tests {
         let settings = db.get_settings();
         assert_eq!(settings.poll_interval_ms, 1000);
         assert_eq!(settings.mode, AppMode::Local);
+        assert!(settings.login_autostart);
     }
 
     #[test]
@@ -148,11 +151,13 @@ mod tests {
         let mut settings = AppSettings::default();
         settings.poll_interval_ms = 2000;
         settings.webp_quality = 90.0;
+        settings.login_autostart = false;
         db.save_settings(&settings).unwrap();
 
         let loaded = db.get_settings();
         assert_eq!(loaded.poll_interval_ms, 2000);
         assert_eq!(loaded.webp_quality, 90.0);
+        assert!(!loaded.login_autostart);
     }
 
     #[test]

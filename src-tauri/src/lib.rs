@@ -13,6 +13,7 @@ use std::sync::{Arc, OnceLock};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_positioner::{Position, WindowExt};
 
@@ -214,6 +215,14 @@ pub fn run() {
             let settings_file = db_path.join("settings.db");
             let settings_db =
                 db::settings::SettingsDb::open(&settings_file).expect("failed to open settings db");
+
+            let s = settings_db.get_settings();
+            if s.login_autostart {
+                let _ = app.autolaunch().enable();
+            } else {
+                let _ = app.autolaunch().disable();
+            }
+
             app.manage(Arc::new(settings_db));
 
             // --- Vault state (locked until user authenticates) ---

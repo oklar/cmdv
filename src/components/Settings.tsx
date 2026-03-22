@@ -4,7 +4,7 @@ import { save, open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
-import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { disable, enable } from "@tauri-apps/plugin-autostart";
 import { QrPairing } from "./QrPairing";
 
 interface AppSettings {
@@ -18,6 +18,7 @@ interface AppSettings {
   sync_sensitive: boolean;
   mode: "local" | "cloud";
   require_password_on_open: boolean;
+  login_autostart: boolean;
 }
 
 export function Settings() {
@@ -28,12 +29,9 @@ export function Settings() {
     total_size_bytes: number;
     max_size_bytes: number;
   } | null>(null);
-  const [loginAutostartEnabled, setLoginAutostartEnabled] = useState(false);
-
   useEffect(() => {
     invoke<AppSettings>("get_settings").then(setSettings).catch(console.error);
     invoke<typeof stats>("get_stats").then(setStats).catch(console.error);
-    isEnabled().then(setLoginAutostartEnabled).catch(() => {});
   }, []);
 
   const saveSettings = async (updated: AppSettings) => {
@@ -140,24 +138,24 @@ export function Settings() {
               type="button"
               onClick={async () => {
                 try {
-                  if (loginAutostartEnabled) {
-                    await disable();
-                    setLoginAutostartEnabled(false);
-                  } else {
+                  const next = !settings.login_autostart;
+                  if (next) {
                     await enable();
-                    setLoginAutostartEnabled(true);
+                  } else {
+                    await disable();
                   }
+                  await saveSettings({ ...settings, login_autostart: next });
                 } catch (err) {
                   console.error("Autostart failed:", err);
                 }
               }}
               className={`relative w-10 h-5 rounded-full transition-colors ${
-                loginAutostartEnabled ? "bg-lime-500" : "bg-zinc-700"
+                settings.login_autostart ? "bg-lime-500" : "bg-zinc-700"
               }`}
             >
               <span
                 className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  loginAutostartEnabled ? "translate-x-5" : ""
+                  settings.login_autostart ? "translate-x-5" : ""
                 }`}
               />
             </button>
