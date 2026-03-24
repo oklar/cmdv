@@ -87,6 +87,18 @@ export function ClipboardList({
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "PageDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 10, entries.length - 1));
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 10, 0));
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        setSelectedIndex(0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        setSelectedIndex(entries.length - 1);
       } else if (e.key === "Enter") {
         e.preventDefault();
         const entry = entries[selectedIndex];
@@ -184,7 +196,9 @@ export function ClipboardList({
       {entries.map((entry, index) => (
         <EntryCard
           key={entry.id}
-          ref={(el) => { entryRefs.current[index] = el; }}
+          ref={(el) => {
+            entryRefs.current[index] = el;
+          }}
           id={entry.id}
           contentType={entry.content_type}
           lastUsedAt={entry.last_used_at}
