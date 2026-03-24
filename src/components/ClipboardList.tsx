@@ -26,6 +26,7 @@ export function ClipboardList({
   const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const entryRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const didCopyRef = useRef(false);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -62,10 +63,17 @@ export function ClipboardList({
   }, [searchQuery, filterType, favoritesOnly]);
 
   useEffect(() => {
-    const resetSelection = () => setSelectedIndex(0);
+    const resetSelection = () => {
+      if (didCopyRef.current) {
+        setSelectedIndex(0);
+        didCopyRef.current = false;
+      } else {
+        entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+      }
+    };
     window.addEventListener("focus", resetSelection);
     return () => window.removeEventListener("focus", resetSelection);
-  }, []);
+  }, [selectedIndex]);
 
   useEffect(() => {
     entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
@@ -141,6 +149,7 @@ export function ClipboardList({
   };
 
   const handleCopyBack = async (id: string) => {
+    didCopyRef.current = true;
     await invoke("copy_entry_to_clipboard", { id });
     await invoke("hide_to_tray");
     await invoke("simulate_paste");

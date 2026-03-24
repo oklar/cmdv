@@ -20,7 +20,7 @@ export function SearchBar({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const onFocus = () => inputRef.current?.focus();
+    const onFocus = () => inputRef.current?.focus({ preventScroll: true });
     window.addEventListener("focus", onFocus);
     onFocus();
     return () => window.removeEventListener("focus", onFocus);
