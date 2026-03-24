@@ -62,6 +62,12 @@ export function ClipboardList({
   }, [searchQuery, filterType, favoritesOnly]);
 
   useEffect(() => {
+    const resetSelection = () => setSelectedIndex(0);
+    window.addEventListener("focus", resetSelection);
+    return () => window.removeEventListener("focus", resetSelection);
+  }, []);
+
+  useEffect(() => {
     entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
