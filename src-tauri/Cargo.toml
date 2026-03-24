@@ -58,6 +58,7 @@ reqwest = { version = "0.12", features = ["json", "native-tls"] }
 
 # Clipboard
 arboard = "3"
+enigo = "0.6"
 
 # QR code
 qrcode = "0.14"

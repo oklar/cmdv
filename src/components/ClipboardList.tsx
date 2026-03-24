@@ -125,6 +125,7 @@ export function ClipboardList({
   const handleCopyBack = async (id: string) => {
     await invoke("copy_entry_to_clipboard", { id });
     await invoke("hide_to_tray");
+    await invoke("simulate_paste");
   };
 
   if (loading) {

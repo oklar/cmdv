@@ -56,7 +56,8 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   return (
     <div
       ref={ref}
-      className={`group px-3 py-2 border-b border-zinc-800/50 transition-colors ${
+      onDoubleClick={() => onCopyBack(id)}
+      className={`group px-3 py-2 border-b border-zinc-800/50 transition-colors cursor-pointer ${
         isSelected ? "bg-zinc-800/70 ring-1 ring-lime-500/40" : "hover:bg-zinc-900/50"
       }`}
     >
