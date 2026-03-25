@@ -216,6 +216,7 @@ export function ClipboardList({
           preview={entry.preview}
           isSelected={index === selectedIndex}
           shortcutKey={shortcutKeyForIndex(index)}
+          index={index}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
           onCopyBack={handleCopyBack}

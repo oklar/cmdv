@@ -9,6 +9,7 @@ interface EntryCardProps {
   preview: string | null;
   isSelected: boolean;
   shortcutKey: string | null;
+  index: number;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onCopyBack: (id: string) => Promise<void>;
@@ -23,6 +24,7 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   preview,
   isSelected,
   shortcutKey,
+  index,
   onToggleFavorite,
   onDelete,
   onCopyBack,
@@ -58,7 +60,11 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
       ref={ref}
       onDoubleClick={() => onCopyBack(id)}
       className={`group px-2.5 py-1.5 border-b border-zinc-800/50 transition-colors cursor-pointer ${
-        isSelected ? "bg-zinc-800/70 ring-1 ring-lime-500/40" : "hover:bg-zinc-900/50"
+        isSelected
+          ? "bg-zinc-800/70 ring-1 ring-lime-500/40"
+          : index % 2 === 0
+            ? "bg-zinc-900/40 hover:bg-zinc-800/50"
+            : "hover:bg-zinc-900/50"
       }`}
     >
       {contentType === "image" && preview ? (
