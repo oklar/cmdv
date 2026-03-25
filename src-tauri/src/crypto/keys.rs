@@ -1,5 +1,5 @@
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use hkdf::Hkdf;
 use rand::RngCore;
@@ -116,6 +116,7 @@ mod mlock {
 pub struct VaultState {
     pub keys: Mutex<Option<AppKeys>>,
     pub monitor_stop: Arc<AtomicBool>,
+    pub monitor_wake: Arc<(Mutex<bool>, Condvar)>,
     pub setup_complete: AtomicBool,
 }
 
@@ -124,6 +125,7 @@ impl VaultState {
         Self {
             keys: Mutex::new(None),
             monitor_stop: Arc::new(AtomicBool::new(true)),
+            monitor_wake: Arc::new((Mutex::new(false), Condvar::new())),
             setup_complete: AtomicBool::new(false),
         }
     }

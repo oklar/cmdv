@@ -445,6 +445,8 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     let stop = vault.monitor_stop.clone();
     stop.store(false, Ordering::Relaxed);
 
+    let wake = vault.monitor_wake.clone();
+
     let guard = vault.keys.lock().unwrap();
     let keys = guard.as_ref().expect("keys must be set before monitoring");
     let hash_key = keys.hash_key;
@@ -459,6 +461,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     std::thread::spawn(move || {
         let mut monitor = clipboard::ClipboardMonitor::new().with_excluded_apps(excluded_apps);
         monitor.seed_from_clipboard(&hash_key);
+        let (lock, cvar) = &*wake;
         while !stop.load(Ordering::Relaxed) {
             match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
                 Ok(Some(id)) => {
@@ -469,7 +472,12 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
                 Err(e) => log::warn!("Clipboard poll error: {}", e),
             }
 
-            std::thread::sleep(Duration::from_secs(1));
+            let mut woken = lock.lock().unwrap();
+            if !*woken {
+                let (guard, _) = cvar.wait_timeout(woken, Duration::from_secs(1)).unwrap();
+                woken = guard;
+            }
+            *woken = false;
         }
         log::info!("Clipboard monitoring stopped");
     });

@@ -67,7 +67,9 @@ export function ClipboardList({
   }, [searchQuery, filterType, favoritesOnly]);
 
   useEffect(() => {
-    const resetSelection = () => {
+    const onFocus = async () => {
+      await invoke("force_clipboard_poll");
+      fetchEntries();
       if (didCopyRef.current) {
         setSelectedIndex(0);
         didCopyRef.current = false;
@@ -75,9 +77,9 @@ export function ClipboardList({
         entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
       }
     };
-    window.addEventListener("focus", resetSelection);
-    return () => window.removeEventListener("focus", resetSelection);
-  }, [selectedIndex]);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [selectedIndex, fetchEntries]);
 
   useEffect(() => {
     entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });

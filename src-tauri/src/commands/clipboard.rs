@@ -140,6 +140,17 @@ pub fn clear_all_entries(
 }
 
 #[tauri::command]
+pub fn force_clipboard_poll(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
+    let (lock, cvar) = &*vault.monitor_wake;
+    let mut woken = lock.lock().map_err(|_| "Lock poisoned")?;
+    *woken = true;
+    cvar.notify_one();
+    drop(woken);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_stats(
     db: State<'_, Arc<Database>>,
     vault: State<'_, Arc<VaultState>>,

@@ -280,6 +280,7 @@ pub fn run() {
             commands::clipboard::delete_entry,
             commands::clipboard::clear_all_entries,
             commands::clipboard::get_stats,
+            commands::clipboard::force_clipboard_poll,
             commands::clipboard::copy_entry_to_clipboard,
             commands::clipboard::simulate_paste,
             commands::settings::get_settings,
