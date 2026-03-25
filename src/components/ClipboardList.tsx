@@ -15,12 +15,16 @@ interface ClipboardListProps {
   searchQuery: string;
   filterType: string | null;
   favoritesOnly: boolean;
+  onFilterTypeChange: (type: string | null) => void;
+  onFavoritesOnlyChange: (fav: boolean) => void;
 }
 
 export function ClipboardList({
   searchQuery,
   filterType,
   favoritesOnly,
+  onFilterTypeChange,
+  onFavoritesOnlyChange,
 }: ClipboardListProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,11 +83,42 @@ export function ClipboardList({
     entryRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
+  const handleToggleFavorite = useCallback(async (id: string) => {
+    try {
+      await invoke("toggle_favorite", { id });
+      fetchEntries();
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err);
+    }
+  }, [fetchEntries]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         invoke("hide_to_tray");
+        return;
+      }
+
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (key === "a") {
+          e.preventDefault();
+          onFilterTypeChange(null);
+        } else if (key === "t") {
+          e.preventDefault();
+          onFilterTypeChange("text");
+        } else if (key === "i") {
+          e.preventDefault();
+          onFilterTypeChange("image");
+        } else if (key === "f") {
+          e.preventDefault();
+          onFavoritesOnlyChange(!favoritesOnly);
+        } else if (key === "s") {
+          e.preventDefault();
+          const entry = entries[selectedIndex];
+          if (entry) handleToggleFavorite(entry.id);
+        }
         return;
       }
 
@@ -128,16 +163,7 @@ export function ClipboardList({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [entries, selectedIndex, searchQuery]);
-
-  const handleToggleFavorite = async (id: string) => {
-    try {
-      await invoke("toggle_favorite", { id });
-      fetchEntries();
-    } catch (err) {
-      console.error("Failed to toggle favorite:", err);
-    }
-  };
+  }, [entries, selectedIndex, searchQuery, favoritesOnly, onFilterTypeChange, onFavoritesOnlyChange, handleToggleFavorite]);
 
   const handleDelete = async (id: string) => {
     try {

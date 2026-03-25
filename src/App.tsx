@@ -87,6 +87,8 @@ export default function App() {
                 searchQuery={searchQuery}
                 filterType={filterType}
                 favoritesOnly={favoritesOnly}
+                onFilterTypeChange={setFilterType}
+                onFavoritesOnlyChange={setFavoritesOnly}
               />
             </>
           ) : (
