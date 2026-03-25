@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use zeroize::Zeroize;
 
 use crate::crypto::keys::{derive_wrapping_key, wrap_master_key, MasterKey, VaultState};
 use crate::db::settings::SettingsDb;
@@ -78,17 +79,20 @@ pub async fn register(
         drop(guard);
 
         let keychain = crate::storage::keychain::KeychainStore::new();
-        let seed = keychain.load_seed()?;
+        let mut seed = keychain.load_seed()?;
         let mut master_bytes = [0u8; 32];
         master_bytes.copy_from_slice(&seed[..32]);
+        seed.zeroize();
         let master_key = MasterKey::from_bytes(master_bytes);
+        master_bytes.zeroize();
 
         let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
             .map_err(|e| format!("BIP39 error: {}", e))?;
-        let mnemonic_entropy = mnemonic.to_entropy();
+        let mut mnemonic_entropy = mnemonic.to_entropy();
 
         let wrapping_key = derive_wrapping_key(&password, &mnemonic_entropy)?;
         let auth_hash = crate::crypto::keys::argon2_derive_auth(&password, &mnemonic_entropy)?;
+        mnemonic_entropy.zeroize();
         let wrapped = wrap_master_key(&wrapping_key, &master_key)?;
 
         (B64.encode(auth_hash), B64.encode(wrapped))
@@ -133,19 +137,23 @@ pub async fn login(
 
     let auth_hash = {
         let keychain = crate::storage::keychain::KeychainStore::new();
-        let seed = keychain.load_seed()?;
+        let mut seed = keychain.load_seed()?;
         let mut master_bytes = [0u8; 32];
         master_bytes.copy_from_slice(&seed[..32]);
+        seed.zeroize();
         let master_key = MasterKey::from_bytes(master_bytes);
+        master_bytes.zeroize();
 
         let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
             .map_err(|e| format!("BIP39 error: {}", e))?;
-        let mnemonic_entropy = mnemonic.to_entropy();
+        let mut mnemonic_entropy = mnemonic.to_entropy();
 
-        B64.encode(crate::crypto::keys::argon2_derive_auth(
+        let result = B64.encode(crate::crypto::keys::argon2_derive_auth(
             &password,
             &mnemonic_entropy,
-        )?)
+        )?);
+        mnemonic_entropy.zeroize();
+        result
     };
 
     let client = reqwest::Client::new();

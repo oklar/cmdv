@@ -36,11 +36,15 @@ impl Database {
     /// Apply the SQLCipher encryption key and initialize the schema.
     /// Must be called exactly once after vault unlock.
     pub fn set_encryption_key(&self, key: &[u8; 32]) -> Result<(), String> {
+        use zeroize::Zeroize;
         let guard = self.conn().map_err(|e| e.to_string())?;
         let conn = guard.as_ref().unwrap();
-        let hex_key = hex::encode(key);
-        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", hex_key))
+        let mut hex_key = hex::encode(key);
+        let mut pragma = format!("PRAGMA key = \"x'{}'\";", hex_key);
+        hex_key.zeroize();
+        conn.execute_batch(&pragma)
             .map_err(|e| format!("Failed to set DB encryption key: {}", e))?;
+        pragma.zeroize();
         schema::initialize(conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;
         Ok(())
     }

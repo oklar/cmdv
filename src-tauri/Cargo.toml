@@ -69,6 +69,7 @@ hex = "0.4"
 
 # Notifications
 notify-rust = "4"
+subtle = "2.6.1"
 
 # Platform memory locking
 [target.'cfg(unix)'.dependencies]

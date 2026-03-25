@@ -6,6 +6,7 @@ use base64::Engine;
 use bip39::Mnemonic;
 use serde::Serialize;
 use tauri::{Manager, State};
+use zeroize::Zeroize;
 
 use crate::clipboard;
 use crate::crypto::keys::{
@@ -61,11 +62,14 @@ pub fn setup_vault(
     let keychain = KeychainStore::new();
     let master_key = match keychain.exists() {
         Ok(true) => {
-            let seed = keychain.load_seed()?;
+            let mut seed = keychain.load_seed()?;
             let mut bytes = [0u8; 32];
             bytes.copy_from_slice(&seed[..32]);
+            seed.zeroize();
             log::info!("Migrating existing master key from keychain");
-            MasterKey::from_bytes(bytes)
+            let mk = MasterKey::from_bytes(bytes);
+            bytes.zeroize();
+            mk
         }
         _ => {
             log::info!("Generating new master key");
@@ -75,13 +79,15 @@ pub fn setup_vault(
 
     let mnemonic =
         Mnemonic::from_entropy(master_key.as_bytes()).map_err(|e| format!("BIP39 error: {}", e))?;
-    let mnemonic_entropy = mnemonic.to_entropy();
+    let mut mnemonic_entropy = mnemonic.to_entropy();
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
 
     let wrapping_key = derive_wrapping_key(&password, &mnemonic_entropy)?;
     let wrapped = wrap_master_key(&wrapping_key, &master_key)?;
 
     let (pw_hash, pw_salt) = hash_password(&password)?;
+
+    mnemonic_entropy.zeroize();
 
     settings_db.set_value("vault_encrypted_master_key", &B64.encode(&wrapped))?;
     settings_db.set_value("vault_password_hash", &B64.encode(pw_hash))?;
@@ -133,10 +139,12 @@ pub fn unlock_vault(
 
     let keychain = KeychainStore::new();
     match keychain.load_seed() {
-        Ok(seed) => {
+        Ok(mut seed) => {
             let mut bytes = [0u8; 32];
             bytes.copy_from_slice(&seed[..32]);
+            seed.zeroize();
             let master_key = MasterKey::from_bytes(bytes);
+            bytes.zeroize();
 
             let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
             db.set_encryption_key(&app_keys.db_key)?;
@@ -174,10 +182,12 @@ pub fn try_auto_unlock(
 
     let keychain = KeychainStore::new();
     match keychain.load_seed() {
-        Ok(seed) => {
+        Ok(mut seed) => {
             let mut bytes = [0u8; 32];
             bytes.copy_from_slice(&seed[..32]);
+            seed.zeroize();
             let master_key = MasterKey::from_bytes(bytes);
+            bytes.zeroize();
 
             let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
             db.set_encryption_key(&app_keys.db_key)?;
@@ -218,7 +228,7 @@ pub fn recover_vault(
 
     let mnemonic = Mnemonic::parse_normalized(&mnemonic_words)
         .map_err(|e| format!("Invalid mnemonic: {}", e))?;
-    let mnemonic_entropy = mnemonic.to_entropy();
+    let mut mnemonic_entropy = mnemonic.to_entropy();
 
     let wrapped_b64 = settings_db
         .get_value("vault_encrypted_master_key")
@@ -226,6 +236,7 @@ pub fn recover_vault(
     let wrapped = B64.decode(&wrapped_b64).map_err(|e| e.to_string())?;
 
     let wrapping_key = derive_wrapping_key(&password, &mnemonic_entropy)?;
+    mnemonic_entropy.zeroize();
     let master_key = unwrap_master_key(&wrapping_key, &wrapped)?;
 
     let keychain = KeychainStore::new();
@@ -476,10 +487,12 @@ pub fn export_database(
     guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
         let keychain = crate::storage::keychain::KeychainStore::new();
-        let seed = keychain.load_seed()?;
+        let mut seed = keychain.load_seed()?;
         let mut master_bytes = [0u8; 32];
         master_bytes.copy_from_slice(&seed[..32]);
+        seed.zeroize();
         let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_bytes.zeroize();
         master_key.derive_blob_key()
     };
     drop(guard);
@@ -507,10 +520,12 @@ pub fn import_database(
     guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
         let keychain = crate::storage::keychain::KeychainStore::new();
-        let seed = keychain.load_seed()?;
+        let mut seed = keychain.load_seed()?;
         let mut master_bytes = [0u8; 32];
         master_bytes.copy_from_slice(&seed[..32]);
+        seed.zeroize();
         let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_bytes.zeroize();
         master_key.derive_blob_key()
     };
     drop(guard);
@@ -552,21 +567,24 @@ pub fn generate_pairing_qr(vault: tauri::State<'_, Arc<VaultState>>) -> Result<S
     drop(guard);
 
     let keychain = crate::storage::keychain::KeychainStore::new();
-    let seed = keychain.load_seed()?;
+    let mut seed = keychain.load_seed()?;
     let mut master_bytes = [0u8; 32];
     master_bytes.copy_from_slice(&seed[..32]);
+    seed.zeroize();
     let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+    master_bytes.zeroize();
 
     let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
         .map_err(|e| format!("BIP39 error: {}", e))?;
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
-    let payload = words.join(" ");
+    let mut payload = words.join(" ");
 
     use qrcode::render::svg;
     use qrcode::QrCode;
 
     let code =
         QrCode::new(payload.as_bytes()).map_err(|e| format!("QR generation error: {}", e))?;
+    payload.zeroize();
     let svg_str = code.render::<svg::Color>().min_dimensions(256, 256).build();
 
     let data_url = format!(
@@ -606,10 +624,12 @@ pub async fn switch_to_cloud(
     // Trigger initial sync upload
     let blob_key = {
         let keychain = crate::storage::keychain::KeychainStore::new();
-        let seed = keychain.load_seed().map_err(|e| e.to_string())?;
+        let mut seed = keychain.load_seed().map_err(|e| e.to_string())?;
         let mut master_bytes = [0u8; 32];
         master_bytes.copy_from_slice(&seed[..32]);
+        seed.zeroize();
         let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
+        master_bytes.zeroize();
         master_key.derive_blob_key()
     };
 

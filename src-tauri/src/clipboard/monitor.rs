@@ -1,4 +1,5 @@
 use arboard::Clipboard;
+use zeroize::Zeroize;
 
 use crate::crypto;
 use crate::db::{Database, EntryType, NewEntry};
@@ -61,17 +62,19 @@ impl ClipboardMonitor {
 
         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
 
-        if let Ok(text) = clipboard.get_text() {
+        if let Ok(mut text) = clipboard.get_text() {
             if text.is_empty() {
                 return Ok(None);
             }
             if text.len() > max_entry_size {
+                text.zeroize();
                 return Ok(None);
             }
 
             let content_hash = crypto::hash::keyed_hash(hash_key, text.as_bytes());
 
             if self.last_text_hash.as_deref() == Some(&content_hash) {
+                text.zeroize();
                 return Ok(None);
             }
 
@@ -80,6 +83,7 @@ impl ClipboardMonitor {
                 .map_err(|e| e.to_string())?
             {
                 self.last_text_hash = Some(content_hash);
+                text.zeroize();
                 return Ok(None);
             }
 
@@ -90,6 +94,8 @@ impl ClipboardMonitor {
                 size_bytes: text.len() as i64,
                 is_favorite: false,
             };
+
+            text.zeroize();
 
             let id = db.insert_entry(&entry).map_err(|e| e.to_string())?;
             self.last_text_hash = Some(content_hash);

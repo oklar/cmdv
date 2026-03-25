@@ -111,22 +111,40 @@ pub fn search_entries(
 }
 
 #[tauri::command]
-pub fn toggle_favorite(db: State<'_, Arc<Database>>, id: String) -> Result<bool, String> {
+pub fn toggle_favorite(
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+    id: String,
+) -> Result<bool, String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
     db.toggle_favorite(&id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn delete_entry(db: State<'_, Arc<Database>>, id: String) -> Result<(), String> {
+pub fn delete_entry(
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+    id: String,
+) -> Result<(), String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
     db.delete_entry(&id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn clear_all_entries(db: State<'_, Arc<Database>>) -> Result<(), String> {
+pub fn clear_all_entries(
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+) -> Result<(), String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
     db.wipe_all().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn get_stats(db: State<'_, Arc<Database>>) -> Result<StatsView, String> {
+pub fn get_stats(
+    db: State<'_, Arc<Database>>,
+    vault: State<'_, Arc<VaultState>>,
+) -> Result<StatsView, String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
     let total_entries = db.get_entry_count().map_err(|e| e.to_string())?;
     let total_size_bytes = db.get_total_size().map_err(|e| e.to_string())?;
     Ok(StatsView {

@@ -1,4 +1,5 @@
 use keyring::Entry;
+use zeroize::Zeroize;
 
 use super::SeedStore;
 
@@ -20,19 +21,23 @@ impl KeychainStore {
 impl SeedStore for KeychainStore {
     fn save_seed(&self, seed: &[u8]) -> Result<(), String> {
         let entry = Self::entry()?;
-        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, seed);
-        entry
+        let mut encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, seed);
+        let result = entry
             .set_password(&encoded)
-            .map_err(|e| format!("Failed to save seed to keychain: {}", e))
+            .map_err(|e| format!("Failed to save seed to keychain: {}", e));
+        encoded.zeroize();
+        result
     }
 
     fn load_seed(&self) -> Result<Vec<u8>, String> {
         let entry = Self::entry()?;
-        let encoded = entry
+        let mut encoded = entry
             .get_password()
             .map_err(|e| format!("Failed to load seed from keychain: {}", e))?;
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encoded)
-            .map_err(|e| format!("Failed to decode seed: {}", e))
+        let result = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encoded)
+            .map_err(|e| format!("Failed to decode seed: {}", e));
+        encoded.zeroize();
+        result
     }
 
     fn delete_seed(&self) -> Result<(), String> {

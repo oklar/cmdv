@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use zeroize::Zeroize;
 
 use crate::crypto::keys::{MasterKey, VaultState};
 use crate::db::settings::SettingsDb;
@@ -35,10 +36,12 @@ fn get_api_base(settings_db: &SettingsDb) -> String {
 
 fn get_blob_key() -> Result<[u8; 32], String> {
     let keychain = KeychainStore::new();
-    let seed = keychain.load_seed()?;
+    let mut seed = keychain.load_seed()?;
     let mut master_bytes = [0u8; 32];
     master_bytes.copy_from_slice(&seed[..32]);
+    seed.zeroize();
     let master_key = MasterKey::from_bytes(master_bytes);
+    master_bytes.zeroize();
     Ok(master_key.derive_blob_key())
 }
 

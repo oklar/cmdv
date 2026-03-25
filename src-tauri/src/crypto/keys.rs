@@ -169,7 +169,8 @@ pub fn verify_password(
     salt: &[u8; 32],
 ) -> Result<bool, String> {
     let computed = argon2_derive(password.as_bytes(), salt)?;
-    Ok(computed == *stored_hash)
+    use subtle::ConstantTimeEq;
+    Ok(computed.ct_eq(stored_hash).into())
 }
 
 fn argon2_derive(input: &[u8], salt: &[u8]) -> Result<[u8; 32], String> {
@@ -215,13 +216,17 @@ pub fn unwrap_master_key(wrapping_key: &[u8; 32], wrapped: &[u8]) -> Result<Mast
         return Err("Wrapped key too short".into());
     }
     let (nonce, ciphertext) = wrapped.split_at(12);
-    let plaintext = super::encrypt::decrypt(wrapping_key, nonce, ciphertext)?;
+    let mut plaintext = super::encrypt::decrypt(wrapping_key, nonce, ciphertext)?;
     if plaintext.len() != 32 {
+        plaintext.zeroize();
         return Err("Unwrapped key has wrong length".into());
     }
     let mut key_bytes = [0u8; 32];
     key_bytes.copy_from_slice(&plaintext);
-    Ok(MasterKey::from_bytes(key_bytes))
+    plaintext.zeroize();
+    let mk = MasterKey::from_bytes(key_bytes);
+    key_bytes.zeroize();
+    Ok(mk)
 }
 
 #[cfg(test)]
