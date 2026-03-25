@@ -219,10 +219,44 @@ export function Settings() {
 
       <AboutSection />
 
+      <KeyboardShortcuts />
+
       {import.meta.env.DEV && (
         <DevSection settings={settings} onSaveSettings={saveSettings} />
       )}
     </div>
+  );
+}
+
+const SHORTCUTS = [
+  { keys: "Ctrl + U", description: "Open / focus Cmdv" },
+  { keys: "Ctrl + 1–9", description: "Quick-paste entry by position" },
+  { keys: "Ctrl + 0", description: "Quick-paste 10th entry" },
+  { keys: "Enter", description: "Paste selected entry" },
+  { keys: "↑ / ↓", description: "Navigate entries" },
+  { keys: "Escape", description: "Hide to tray" },
+] as const;
+
+function KeyboardShortcuts() {
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-zinc-300 mb-2">
+        Keyboard Shortcuts
+      </h2>
+      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+        {SHORTCUTS.map(({ keys, description }) => (
+          <div
+            key={keys}
+            className="flex items-center justify-between px-3 py-2"
+          >
+            <span className="text-xs text-zinc-400">{description}</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[11px] font-mono">
+              {keys}
+            </kbd>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

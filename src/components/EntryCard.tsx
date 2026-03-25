@@ -97,9 +97,9 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
 
       <div className="flex items-center gap-1.5 mt-1">
         {shortcutKey !== null && (
-          <span className="w-4 h-4 rounded-sm bg-zinc-800/80 text-zinc-500 text-[9px] font-medium flex items-center justify-center shrink-0">
-            {shortcutKey}
-          </span>
+          <kbd className="h-4 px-1 rounded-sm bg-zinc-800/80 text-zinc-500 text-[9px] font-medium flex items-center justify-center shrink-0 font-mono">
+            Ctrl+{shortcutKey}
+          </kbd>
         )}
         <button
           onClick={() => onToggleFavorite(id)}

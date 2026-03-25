@@ -113,7 +113,7 @@ export function ClipboardList({
         if (entry) handleCopyBack(entry.id);
       }
 
-      if (!searchQuery && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.ctrlKey && !e.altKey && !e.metaKey) {
         const digit = parseInt(e.key, 10);
         if (!isNaN(digit)) {
           const index = digit === 0 ? 9 : digit - 1;
@@ -194,7 +194,6 @@ export function ClipboardList({
   }
 
   const shortcutKeyForIndex = (index: number): string | null => {
-    if (searchQuery) return null;
     if (index < 9) return String(index + 1);
     if (index === 9) return "0";
     return null;
