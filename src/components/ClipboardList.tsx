@@ -217,6 +217,7 @@ export function ClipboardList({
           isSelected={index === selectedIndex}
           shortcutKey={shortcutKeyForIndex(index)}
           index={index}
+          searchQuery={searchQuery}
           onToggleFavorite={handleToggleFavorite}
           onDelete={handleDelete}
           onCopyBack={handleCopyBack}

@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
 
 interface EntryCardProps {
   id: string;
@@ -10,6 +10,7 @@ interface EntryCardProps {
   isSelected: boolean;
   shortcutKey: string | null;
   index: number;
+  searchQuery: string;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onCopyBack: (id: string) => Promise<void>;
@@ -25,6 +26,7 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
   isSelected,
   shortcutKey,
   index,
+  searchQuery,
   onToggleFavorite,
   onDelete,
   onCopyBack,
@@ -55,6 +57,20 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
     return preview;
   };
 
+  const highlightText = (text: string): ReactNode => {
+    const q = searchQuery.trim();
+    if (!q) return text;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escaped})`, "gi");
+    const parts = text.split(regex);
+    if (parts.length === 1) return text;
+    return parts.map((part, i) =>
+      regex.test(part)
+        ? <span key={i} className="bg-lime-500/30 text-lime-200 rounded-sm px-px">{part}</span>
+        : part
+    );
+  };
+
   return (
     <div
       ref={ref}
@@ -75,7 +91,7 @@ export const EntryCard = forwardRef<HTMLDivElement, EntryCardProps>(function Ent
         />
       ) : (
         <p className="text-xs text-zinc-300 font-mono leading-relaxed line-clamp-3 whitespace-pre-wrap break-all">
-          {displayContent()}
+          {contentType === "image" ? null : highlightText(displayContent() ?? "")}
         </p>
       )}
 
