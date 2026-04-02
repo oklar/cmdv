@@ -6,6 +6,7 @@ pub mod image;
 pub mod storage;
 pub mod sync;
 
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -13,7 +14,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_positioner::{Position, WindowExt};
 
 static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
@@ -27,6 +28,19 @@ fn launched_with_tray() -> bool {
 }
 
 use crypto::keys::VaultState;
+
+/// Applies the global show/hide shortcut from stored settings (replaces any previous registration).
+pub(crate) fn apply_global_toggle_shortcut(app: &tauri::AppHandle, shortcut_str: &str) -> Result<(), String> {
+    let trimmed = shortcut_str.trim();
+    if trimmed.is_empty() {
+        return Err("Shortcut cannot be empty.".to_string());
+    }
+    let parsed = Shortcut::from_str(trimmed).map_err(|e| format!("Invalid shortcut: {e}"))?;
+
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    gs.register(parsed).map_err(|e| e.to_string())
+}
 
 fn toggle_window(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
@@ -195,10 +209,6 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // --- Register Ctrl+U global shortcut ---
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyU);
-            app.global_shortcut().register(shortcut)?;
-
             // --- Database ---
             let db_path = app
                 .path()
@@ -215,8 +225,11 @@ pub fn run() {
             let settings_db =
                 db::settings::SettingsDb::open(&settings_file).expect("failed to open settings db");
 
+            let initial_settings = settings_db.get_settings();
+            apply_global_toggle_shortcut(&app.handle(), &initial_settings.global_toggle_shortcut)?;
+
             if !cfg!(debug_assertions) {
-                let s = settings_db.get_settings();
+                let s = &initial_settings;
                 if s.login_autostart {
                     let _ = app.autolaunch().enable();
                 } else {
