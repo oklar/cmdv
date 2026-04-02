@@ -14,6 +14,13 @@ pub struct AppSettings {
     pub mode: AppMode,
     pub require_password_on_open: bool,
     pub login_autostart: bool,
+    /// Global hotkey to show or hide the main window (Tauri/global-hotkey format, e.g. `CommandOrControl+U`).
+    #[serde(default = "default_global_toggle_shortcut")]
+    pub global_toggle_shortcut: String,
+}
+
+fn default_global_toggle_shortcut() -> String {
+    "CommandOrControl+U".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -41,6 +48,7 @@ impl Default for AppSettings {
             mode: AppMode::Local,
             require_password_on_open: false,
             login_autostart: true,
+            global_toggle_shortcut: "CommandOrControl+U".to_string(),
         }
     }
 }
@@ -162,5 +170,14 @@ mod tests {
         assert!(db.get_value("test_key").is_none());
         db.set_value("test_key", "test_value").unwrap();
         assert_eq!(db.get_value("test_key").unwrap(), "test_value");
+    }
+
+    #[test]
+    fn global_toggle_shortcut_defaults_when_missing_in_json() {
+        let s = AppSettings::default();
+        let mut v: serde_json::Value = serde_json::to_value(&s).unwrap();
+        v.as_object_mut().unwrap().remove("global_toggle_shortcut");
+        let loaded: AppSettings = serde_json::from_value(v).unwrap();
+        assert_eq!(loaded.global_toggle_shortcut, "CommandOrControl+U");
     }
 }
