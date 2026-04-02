@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
@@ -17,6 +17,83 @@ interface AppSettings {
   mode: "local" | "cloud";
   require_password_on_open: boolean;
   login_autostart: boolean;
+  /** Stored format e.g. CommandOrControl+U or Control+Shift+KeyP */
+  global_toggle_shortcut: string;
+}
+
+const DEFAULT_GLOBAL_TOGGLE = "CommandOrControl+U";
+
+function isMacLikePlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const p = navigator.platform ?? "";
+  const ua = navigator.userAgent ?? "";
+  return /Mac|iPhone|iPad|iPod/.test(p) || /Mac OS/.test(ua);
+}
+
+/** Human-readable labels for the shortcuts list (not necessarily identical to stored string). */
+function formatShortcutForDisplay(shortcut: string): string {
+  const isMac = isMacLikePlatform();
+  const replacer = isMac ? "⌘" : "Ctrl";
+  return shortcut
+    .split("+")
+    .map((part) => {
+      const t = part.trim();
+      if (t === "CommandOrControl" || t === "CmdOrControl") return replacer;
+      if (t === "Control") return "Ctrl";
+      if (t === "Super") return isMac ? "⌘" : "Win";
+      if (t === "Alt") return isMac ? "⌥" : "Alt";
+      if (t === "Shift") return "⇧";
+      if (t.startsWith("Key") && t.length === 4) return t.slice(3);
+      if (t.startsWith("Digit")) return t.slice(5);
+      return t;
+    })
+    .join(" + ");
+}
+
+const MODIFIER_CODES = new Set([
+  "ControlLeft",
+  "ControlRight",
+  "MetaLeft",
+  "MetaRight",
+  "AltLeft",
+  "AltRight",
+  "ShiftLeft",
+  "ShiftRight",
+]);
+
+function shortcutFromKeyEvent(e: KeyboardEvent): string | null {
+  const isMac = isMacLikePlatform();
+  const parts: string[] = [];
+
+  if (isMac) {
+    if (e.metaKey) parts.push("Super");
+    if (e.ctrlKey) parts.push("Control");
+  } else {
+    if (e.ctrlKey) parts.push("Control");
+    if (e.metaKey) parts.push("Super");
+  }
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+
+  if (MODIFIER_CODES.has(e.code)) {
+    return null;
+  }
+
+  const keyTok = e.code.trim();
+  if (!keyTok || keyTok === "Unidentified") return null;
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  parts.push(keyTok);
+  return parts.join("+");
+}
+
+function normalizeStoredShortcut(raw: string): string {
+  const t = raw.trim();
+  if (!t) return DEFAULT_GLOBAL_TOGGLE;
+  return t.replace(/\bcmdorcontrol\b/gi, "CommandOrControl");
 }
 
 export function Settings() {
@@ -130,6 +207,17 @@ export function Settings() {
       <section>
         <h2 className="text-sm font-medium text-zinc-300 mb-2">Startup</h2>
         <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+          <GlobalToggleShortcutRow
+            current={settings.global_toggle_shortcut}
+            commitShortcut={async (next) => {
+              const updated = {
+                ...settings,
+                global_toggle_shortcut: normalizeStoredShortcut(next),
+              };
+              await invoke("update_settings", { settings: updated });
+              setSettings(updated);
+            }}
+          />
           <SettingRow
             label="Open at login (minimized to tray)"
             description="Register Cmdv to start when you sign in; opens in the tray with a notification"
@@ -219,7 +307,7 @@ export function Settings() {
 
       <AboutSection />
 
-      <KeyboardShortcuts />
+      <KeyboardShortcuts globalOpenShortcut={settings.global_toggle_shortcut} />
 
       {import.meta.env.DEV && (
         <DevSection settings={settings} onSaveSettings={saveSettings} />
@@ -228,8 +316,7 @@ export function Settings() {
   );
 }
 
-const SHORTCUTS = [
-  { keys: "Ctrl + U", description: "Open / focus Cmdv" },
+const IN_APP_SHORTCUT_ROWS = [
   { keys: "Ctrl + 1–9", description: "Quick-paste entry by position" },
   { keys: "Ctrl + 0", description: "Quick-paste 10th entry" },
   { keys: "Enter", description: "Paste selected entry" },
@@ -242,16 +329,147 @@ const SHORTCUTS = [
   { keys: "Alt + S", description: "Star / unstar selected entry" },
 ] as const;
 
-function KeyboardShortcuts() {
+function GlobalToggleShortcutRow({
+  current,
+  commitShortcut,
+}: {
+  current: string;
+  commitShortcut: (next: string) => Promise<void>;
+}) {
+  const [listening, setListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const trapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (listening) {
+      const id = requestAnimationFrame(() => trapRef.current?.focus());
+      return () => cancelAnimationFrame(id);
+    }
+  }, [listening]);
+
+  const stopListening = () => {
+    setListening(false);
+    setError(null);
+  };
+
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!listening) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.key === "Escape") {
+      stopListening();
+      return;
+    }
+
+    const built = shortcutFromKeyEvent(e.nativeEvent);
+    if (!built) return;
+
+    setError(null);
+    try {
+      await commitShortcut(built);
+      setListening(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="px-3 py-2.5 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm text-zinc-300">Global shortcut (system-wide)</div>
+          <div className="text-xs text-zinc-500 mt-0.5">
+            Show or hide Cmdv from anywhere. Must include a modifier (e.g. Ctrl or ⌘) plus one key.
+          </div>
+        </div>
+        <kbd className="shrink-0 px-2 py-1 rounded bg-zinc-800 text-zinc-300 text-[11px] font-mono max-w-[min(100%,14rem)] truncate">
+          {formatShortcutForDisplay(normalizeStoredShortcut(current))}
+        </kbd>
+      </div>
+      {listening && (
+        <div
+          ref={trapRef}
+          tabIndex={0}
+          role="button"
+          aria-label="Recording keyboard shortcut"
+          onKeyDown={handleKeyDown}
+          className="rounded-md border border-lime-500/40 bg-lime-950/20 px-3 py-2 text-xs text-lime-200/90 outline-none focus:ring-1 focus:ring-lime-500/50"
+        >
+          Press your new shortcut…{" "}
+          <span className="text-zinc-500">Escape to cancel</span>
+        </div>
+      )}
+      {error && (
+        <p className="text-xs text-red-400" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {!listening ? (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setListening(true);
+            }}
+            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+          >
+            Change shortcut
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={stopListening}
+            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={async () => {
+            setError(null);
+            setListening(false);
+            try {
+              await commitShortcut(DEFAULT_GLOBAL_TOGGLE);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            }
+          }}
+          className="text-xs bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 px-3 py-1.5 rounded-md transition-colors"
+        >
+          Use default (⌘/Ctrl + U)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function KeyboardShortcuts({ globalOpenShortcut }: { globalOpenShortcut: string }) {
+  const rows = useMemo(
+    () => [
+      {
+        keys: formatShortcutForDisplay(normalizeStoredShortcut(globalOpenShortcut)),
+        description: "Open / focus Cmdv (global)",
+      },
+      ...IN_APP_SHORTCUT_ROWS.map((r) => ({
+        keys: r.keys,
+        description: r.description,
+      })),
+    ],
+    [globalOpenShortcut],
+  );
+
   return (
     <section>
       <h2 className="text-sm font-medium text-zinc-300 mb-2">
         Keyboard Shortcuts
       </h2>
       <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
-        {SHORTCUTS.map(({ keys, description }) => (
+        {rows.map(({ keys, description }) => (
           <div
-            key={keys}
+            key={`${description}-${keys}`}
             className="flex items-center justify-between px-3 py-2"
           >
             <span className="text-xs text-zinc-400">{description}</span>
