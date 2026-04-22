@@ -293,11 +293,6 @@ pub fn reset_vault(
         "vault_encrypted_master_key",
         "vault_password_hash",
         "vault_password_salt",
-        "auth_email",
-        "auth_access_token",
-        "auth_refresh_token",
-        "auth_has_subscription",
-        "last_sync_at",
     ] {
         settings_db.delete_value(key).ok();
     }
@@ -601,59 +596,6 @@ pub fn generate_pairing_qr(vault: tauri::State<'_, Arc<VaultState>>) -> Result<S
     );
 
     Ok(data_url)
-}
-
-#[tauri::command]
-pub async fn switch_to_cloud(
-    vault: tauri::State<'_, Arc<VaultState>>,
-    settings_db: tauri::State<'_, Arc<SettingsDb>>,
-    db: tauri::State<'_, Arc<Database>>,
-) -> Result<(), String> {
-    {
-        let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-        if guard.is_none() {
-            return Err("Vault is locked".into());
-        }
-    }
-
-    let has_sub = settings_db
-        .get_value("auth_has_subscription")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-
-    if !has_sub {
-        return Err("Cloud sync requires an active subscription".into());
-    }
-
-    let mut settings = settings_db.get_settings();
-    settings.mode = crate::db::settings::AppMode::Cloud;
-    settings_db.save_settings(&settings)?;
-
-    // Trigger initial sync upload
-    let blob_key = {
-        let keychain = crate::storage::keychain::KeychainStore::new();
-        let mut seed = keychain.load_seed().map_err(|e| e.to_string())?;
-        let mut master_bytes = [0u8; 32];
-        master_bytes.copy_from_slice(&seed[..32]);
-        seed.zeroize();
-        let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
-        master_bytes.zeroize();
-        master_key.derive_blob_key()
-    };
-
-    let encrypted = crate::sync::blob::export_to_blob(&db, &blob_key)?;
-    log::info!("Initial cloud sync: exported {} bytes", encrypted.len());
-
-    Ok(())
-}
-
-#[tauri::command]
-pub fn switch_to_local(settings_db: tauri::State<'_, Arc<SettingsDb>>) -> Result<(), String> {
-    let mut settings = settings_db.get_settings();
-    settings.mode = crate::db::settings::AppMode::Local;
-    settings_db.save_settings(&settings)?;
-    log::info!("Switched to local-only mode");
-    Ok(())
 }
 
 fn enforce_storage_limit(db: &Database, max_total_size: i64) {

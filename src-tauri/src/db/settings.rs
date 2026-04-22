@@ -8,19 +8,10 @@ pub struct AppSettings {
     pub poll_interval_ms: u64,
     pub max_entry_size_bytes: i64,
     pub max_total_size_bytes: i64,
-    pub sync_interval_secs: u64,
     pub webp_quality: f32,
     pub excluded_apps: Vec<String>,
-    pub mode: AppMode,
     pub require_password_on_open: bool,
     pub login_autostart: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum AppMode {
-    Local,
-    Cloud,
 }
 
 impl Default for AppSettings {
@@ -29,7 +20,6 @@ impl Default for AppSettings {
             poll_interval_ms: 1000,
             max_entry_size_bytes: 5 * 1024 * 1024,
             max_total_size_bytes: 50 * 1024 * 1024,
-            sync_interval_secs: 30,
             webp_quality: 100.0,
             excluded_apps: vec![
                 "1password".into(),
@@ -38,7 +28,6 @@ impl Default for AppSettings {
                 "keepassxc".into(),
                 "lastpass".into(),
             ],
-            mode: AppMode::Local,
             require_password_on_open: false,
             login_autostart: true,
         }
@@ -137,7 +126,6 @@ mod tests {
         let db = SettingsDb::open_in_memory().unwrap();
         let settings = db.get_settings();
         assert_eq!(settings.poll_interval_ms, 1000);
-        assert_eq!(settings.mode, AppMode::Local);
         assert!(settings.login_autostart);
     }
 

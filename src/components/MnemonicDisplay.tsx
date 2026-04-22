@@ -91,7 +91,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
 
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-3">
         <p className="text-amber-400 text-xs">
-          If you lose these words and all your devices, your synced data cannot
+          If you lose these words and all your devices, your data cannot
           be recovered. CMDV support cannot help — this is by design for your
           security.
         </p>

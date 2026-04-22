@@ -10,7 +10,6 @@ const SALT_HASH_KEY: &[u8] = b"cmdv-hash-key";
 const SALT_BLOB_ENC: &[u8] = b"cmdv-blob-encryption";
 const SALT_DB_ENC: &[u8] = b"cmdv-db-encryption";
 const SALT_WRAP: &[u8] = b"cmdv-wrap-derive";
-const SALT_AUTH: &[u8] = b"cmdv-auth-derive";
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct MasterKey([u8; 32]);
@@ -137,15 +136,6 @@ impl VaultState {
             None => Err("Vault is locked".into()),
         }
     }
-}
-
-pub fn argon2_derive_auth(password: &str, mnemonic_entropy: &[u8]) -> Result<[u8; 32], String> {
-    let mut input = Vec::with_capacity(password.len() + mnemonic_entropy.len());
-    input.extend_from_slice(password.as_bytes());
-    input.extend_from_slice(mnemonic_entropy);
-    let result = argon2_derive(&input, SALT_AUTH)?;
-    input.zeroize();
-    Ok(result)
 }
 
 pub fn derive_wrapping_key(password: &str, mnemonic_entropy: &[u8]) -> Result<[u8; 32], String> {

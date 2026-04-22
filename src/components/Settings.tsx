@@ -11,10 +11,8 @@ interface AppSettings {
   poll_interval_ms: number;
   max_entry_size_bytes: number;
   max_total_size_bytes: number;
-  sync_interval_secs: number;
   webp_quality: number;
   excluded_apps: string[];
-  mode: "local" | "cloud";
   require_password_on_open: boolean;
   login_autostart: boolean;
 }
