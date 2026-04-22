@@ -128,14 +128,6 @@ impl VaultState {
             setup_complete: AtomicBool::new(false),
         }
     }
-
-    pub fn with_keys(&self, f: impl FnOnce(&AppKeys) -> Result<(), String>) -> Result<(), String> {
-        let guard = self.keys.lock().map_err(|_| "Lock poisoned")?;
-        match guard.as_ref() {
-            Some(keys) => f(keys),
-            None => Err("Vault is locked".into()),
-        }
-    }
 }
 
 pub fn derive_wrapping_key(password: &str, mnemonic_entropy: &[u8]) -> Result<[u8; 32], String> {
