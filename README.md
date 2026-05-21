@@ -5,7 +5,7 @@
 <h1 align="center">CMDV</h1>
 
 <p align="center">
-  Zero-knowledge encrypted clipboard manager for Windows and Linux.
+  Encrypted clipboard manager for Windows and Linux.
 </p>
 
 <p align="center">
@@ -18,26 +18,32 @@
 
 ## Features
 
-- **Clipboard history** — automatically captures text, images, and files you copy
-- **Zero-knowledge encryption** — all data is encrypted locally with AES-256-GCM before it leaves your machine
-- **Mnemonic recovery** — BIP-39 mnemonic phrase for key backup and device pairing
-- **Cloud sync** — optional end-to-end encrypted sync across devices
-- **Sensitive data detection** — automatically flags passwords, tokens, and API keys
+- **Clipboard history** — automatically captures text and images you copy
+- **Encrypted vault** — history is stored in a SQLCipher database; keys live in the OS keychain (Windows Credential Manager / Linux Secret Service)
+- **Vault password + recovery phrase** — BIP-39 mnemonic for recovery and device pairing (QR)
+- **Secure paste** — hotkey (Ctrl+Alt+Shift+C) creates a one-time encrypted link; ciphertext is uploaded, the decryption key stays in the URL fragment (not sent to the server)
+- **Password-manager awareness** — skips capture when the foreground app is a known password manager (Windows)
 - **Search and filter** — full-text search with content type filtering and favorites
-- **System tray** — runs quietly in the background with a global shortcut (Ctrl+U)
-- **Auto-updates** — the app silently updates itself from GitHub Releases
+- **Encrypted backup** — export and import an encrypted blob of your history (manual sync between devices today)
+- **System tray** — runs in the background; global shortcut Ctrl+U to open
+- **Auto-updates** — checks GitHub Releases on launch; install from Settings
 - **Cross-platform** — Windows (NSIS installer) and Linux (AppImage, .deb)
+
+### Planned
+
+- **Cloud sync** — optional sync across devices; client-side encryption before upload (zero-knowledge on the server)
+- **File clipboard** — capture file paths from the clipboard
 
 ## Architecture
 
-| Layer       | Technology                                                      |
-| ----------- | --------------------------------------------------------------- |
-| Frontend    | React 19, Tailwind CSS 4, TypeScript                            |
-| Backend     | Rust, Tauri v2                                                  |
-| Database    | SQLite with SQLCipher (encrypted at rest)                       |
-| Crypto      | AES-256-GCM, Argon2, BLAKE3, HKDF-SHA256                        |
-| Key storage | OS keychain (Windows Credential Manager / Linux Secret Service) |
-| Sync        | Client-side encryption → REST API → R2 blob storage             |
+| Layer        | Technology                                                      |
+| ------------ | --------------------------------------------------------------- |
+| Frontend     | React 19, Tailwind CSS 4, TypeScript                            |
+| Backend      | Rust, Tauri v2                                                  |
+| Database     | SQLite with SQLCipher (encrypted at rest)                       |
+| Crypto       | AES-256-GCM (vault, backups), AES-128-GCM (secure paste), Argon2, BLAKE3, HKDF-SHA256 |
+| Key storage  | OS keychain                                                     |
+| Secure paste | Encrypted upload to API; paste site decrypts in the browser using the URL fragment |
 
 ## Download
 

@@ -452,19 +452,23 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     let max_total_size = settings.max_total_size_bytes;
     let excluded_apps = settings.excluded_apps.clone();
     let poll_db = db.clone();
+    let skip_hash = vault.clipboard_skip_hash.clone();
+    let secure_paste_in_flight = vault.secure_paste_in_flight.clone();
 
     std::thread::spawn(move || {
         let mut monitor = clipboard::ClipboardMonitor::new().with_excluded_apps(excluded_apps);
         monitor.seed_from_clipboard(&hash_key);
         let (lock, cvar) = &*wake;
         while !stop.load(Ordering::Relaxed) {
-            match monitor.poll_once(&poll_db, &hash_key, max_entry_size) {
-                Ok(Some(id)) => {
-                    log::info!("Captured clipboard entry: {}", id);
-                    enforce_storage_limit(&poll_db, max_total_size);
+            if !secure_paste_in_flight.load(Ordering::Acquire) {
+                match monitor.poll_once(&poll_db, &hash_key, max_entry_size, &skip_hash) {
+                    Ok(Some(id)) => {
+                        log::info!("Captured clipboard entry: {}", id);
+                        enforce_storage_limit(&poll_db, max_total_size);
+                    }
+                    Ok(None) => {}
+                    Err(e) => log::warn!("Clipboard poll error: {}", e),
                 }
-                Ok(None) => {}
-                Err(e) => log::warn!("Clipboard poll error: {}", e),
             }
 
             let mut woken = lock.lock().unwrap();

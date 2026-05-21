@@ -28,6 +28,10 @@ fn launched_with_tray() -> bool {
 
 use crypto::keys::VaultState;
 
+fn secure_paste_mods() -> Modifiers {
+    Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT
+}
+
 fn toggle_window(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -154,9 +158,32 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        toggle_window(app);
+                .with_handler(|app, shortcut, event| {
+                    match (shortcut.mods, shortcut.key) {
+                        (Modifiers::CONTROL, Code::KeyU) => {
+                            if event.state != ShortcutState::Pressed {
+                                return;
+                            }
+                            toggle_window(app);
+                        }
+                        (m, Code::KeyC) if m == secure_paste_mods() => {
+                            if event.state != ShortcutState::Released {
+                                return;
+                            }
+                            let Some(vault) = app.try_state::<Arc<VaultState>>() else {
+                                return;
+                            };
+                            let vault = vault.inner().clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Err(e) =
+                                    commands::secure_paste::run_create_secure_paste(&vault).await
+                                {
+                                    log::warn!("Secure paste failed: {e}");
+                                    commands::secure_paste::notify_secure_paste_error(&e);
+                                }
+                            });
+                        }
+                        _ => {}
                     }
                 })
                 .build(),
@@ -195,10 +222,6 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // --- Register Ctrl+U global shortcut ---
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyU);
-            app.global_shortcut().register(shortcut)?;
-
             // --- Database ---
             let db_path = app
                 .path()
@@ -229,6 +252,23 @@ pub fn run() {
             // --- Vault state (locked until user authenticates) ---
             let vault = Arc::new(VaultState::new());
             app.manage(vault);
+
+            // --- Global shortcuts (after vault is managed) ---
+            let gs = app.global_shortcut();
+
+            let open_shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyU);
+            let _ = gs.unregister(open_shortcut.clone());
+            gs.register(open_shortcut)
+                .map_err(|e| format!("Failed to register Ctrl+U: {e}"))?;
+
+            let paste_shortcut = Shortcut::new(Some(secure_paste_mods()), Code::KeyC);
+            let _ = gs.unregister(paste_shortcut.clone());
+            if let Err(e) = gs.register(paste_shortcut) {
+                log::warn!(
+                    "Secure paste hotkey (Ctrl+Alt+Shift+C) not registered: {e}. \
+                     Another app may be using it."
+                );
+            }
 
             Ok(())
         })
@@ -283,6 +323,7 @@ pub fn run() {
             commands::clipboard::force_clipboard_poll,
             commands::clipboard::copy_entry_to_clipboard,
             commands::clipboard::simulate_paste,
+            commands::secure_paste::create_secure_paste,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::vault::get_vault_status,

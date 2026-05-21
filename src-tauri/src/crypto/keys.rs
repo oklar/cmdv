@@ -117,6 +117,10 @@ pub struct VaultState {
     pub monitor_stop: Arc<AtomicBool>,
     pub monitor_wake: Arc<(Mutex<bool>, Condvar)>,
     pub setup_complete: AtomicBool,
+    /// Next clipboard text with this content hash is ignored (e.g. secure-paste link).
+    pub clipboard_skip_hash: Arc<Mutex<Option<Vec<u8>>>>,
+    /// True while `run_create_secure_paste` is running (blocks overlapping hotkey fires).
+    pub secure_paste_in_flight: Arc<AtomicBool>,
 }
 
 impl VaultState {
@@ -126,6 +130,8 @@ impl VaultState {
             monitor_stop: Arc::new(AtomicBool::new(true)),
             monitor_wake: Arc::new((Mutex::new(false), Condvar::new())),
             setup_complete: AtomicBool::new(false),
+            clipboard_skip_hash: Arc::new(Mutex::new(None)),
+            secure_paste_in_flight: Arc::new(AtomicBool::new(false)),
         }
     }
 }

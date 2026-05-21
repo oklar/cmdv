@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use arboard::Clipboard;
 use zeroize::Zeroize;
 
@@ -52,6 +54,7 @@ impl ClipboardMonitor {
         db: &Database,
         hash_key: &[u8; 32],
         max_entry_size: usize,
+        clipboard_skip_hash: &Arc<Mutex<Option<Vec<u8>>>>,
     ) -> Result<Option<String>, String> {
         let source_app = source::get_foreground_app();
         if let Some(ref app) = source_app {
@@ -72,6 +75,15 @@ impl ClipboardMonitor {
             }
 
             let content_hash = crypto::hash::keyed_hash(hash_key, text.as_bytes());
+
+            if let Ok(mut skip) = clipboard_skip_hash.lock() {
+                if skip.as_ref() == Some(&content_hash) {
+                    *skip = None;
+                    self.last_text_hash = Some(content_hash);
+                    text.zeroize();
+                    return Ok(None);
+                }
+            }
 
             if self.last_text_hash.as_deref() == Some(&content_hash) {
                 text.zeroize();

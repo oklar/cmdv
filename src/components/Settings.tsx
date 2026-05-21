@@ -228,6 +228,11 @@ export function Settings() {
 
 const SHORTCUTS = [
   { keys: "Ctrl + U", description: "Open / focus Cmdv" },
+  {
+    keys: "Ctrl + Alt + Shift + C",
+    description:
+      "Select text, then Ctrl+Alt+Shift+C to create a one-time secure link",
+  },
   { keys: "Ctrl + 1–9", description: "Quick-paste entry by position" },
   { keys: "Ctrl + 0", description: "Quick-paste 10th entry" },
   { keys: "Enter", description: "Paste selected entry" },
