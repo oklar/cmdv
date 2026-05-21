@@ -89,6 +89,7 @@ pub async fn run_create_secure_paste(vault: &Arc<VaultState>) -> Result<(), Stri
         );
         encrypted.key_b64.zeroize();
 
+        set_clipboard_skip_hash(vault, link.as_bytes())?;
         set_clipboard_text(&link)?;
         notify_secure_paste_created(&paste_id)?;
         link.zeroize();
@@ -203,13 +204,23 @@ fn wake_clipboard_monitor(vault: &Arc<VaultState>) -> Result<(), String> {
     Ok(())
 }
 
+fn paste_id_hint(paste_id: &str) -> String {
+    if paste_id.len() > 6 {
+        format!("{}…", &paste_id[..6])
+    } else {
+        paste_id.to_string()
+    }
+}
+
 fn notify_secure_paste_created(paste_id: &str) -> Result<(), String> {
+    let id_hint = paste_id_hint(paste_id);
+
     notify_rust::Notification::new()
-        .summary("Secure paste link copied")
+        .summary("Secure paste ready")
         .appname("CMDV")
-        .body(&format!("One-time link ready (id: {paste_id}). Key is only in the URL fragment."))
+        .body(&format!("Link copied · {id_hint}"))
         .auto_icon()
-        .timeout(8000)
+        .timeout(5000)
         .show()
         .map_err(|e| e.to_string())
 }
