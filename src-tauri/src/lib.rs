@@ -29,7 +29,7 @@ fn launched_with_tray() -> bool {
 use crypto::keys::VaultState;
 
 fn secure_paste_mods() -> Modifiers {
-    Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT
+    Modifiers::CONTROL | Modifiers::SHIFT
 }
 
 fn toggle_window(app: &tauri::AppHandle) {
@@ -265,7 +265,7 @@ pub fn run() {
             let _ = gs.unregister(paste_shortcut.clone());
             if let Err(e) = gs.register(paste_shortcut) {
                 log::warn!(
-                    "Secure paste hotkey (Ctrl+Alt+Shift+C) not registered: {e}. \
+                    "Secure paste hotkey (Ctrl+Shift+C) not registered: {e}. \
                      Another app may be using it."
                 );
             }

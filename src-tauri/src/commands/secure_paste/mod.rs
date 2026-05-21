@@ -122,7 +122,7 @@ fn read_clipboard_text() -> Result<String, String> {
     }
 
     Err(
-        "Could not capture selected text. Select text in the active window, then press Ctrl+Alt+Shift+C."
+        "Could not capture selected text. Select text in the active window, then press Ctrl+Shift+C."
             .into(),
     )
 }
