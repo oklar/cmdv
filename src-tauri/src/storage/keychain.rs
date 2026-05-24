@@ -62,5 +62,3 @@ impl Default for KeychainStore {
         Self::new()
     }
 }
-
-use base64::Engine as _;

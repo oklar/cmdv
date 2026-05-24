@@ -222,7 +222,8 @@ fn notify_secure_paste_created(paste_id: &str) -> Result<(), String> {
         .auto_icon()
         .timeout(5000)
         .show()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn notify_secure_paste_error(message: &str) {
