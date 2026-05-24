@@ -1,37 +1,33 @@
-name: Release
+---
+name: CI
 
-on:
+"on":
   push:
-    tags: ['v*']
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: cmdv-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   checks: write
 
 jobs:
-  publish:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-22.04
-            args: ''
-          - platform: windows-latest
-            args: ''
-
-    runs-on: ${{ matrix.platform }}
-
+  ci:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -56,16 +52,5 @@ jobs:
       - name: Test
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'cmdv v__VERSION__'
-          releaseBody: 'See the assets to download and install.'
-          releaseDraft: true
-          prerelease: false
-          updaterJsonPreferNsis: true
-          args: ${{ matrix.args }}
+      - name: Build frontend
+        run: npm run build
