@@ -70,4 +70,11 @@ mod tests {
             .unwrap();
         assert!(decoded.len() >= 12);
     }
+
+    #[test]
+    fn key_b64_is_16_byte_aes128_raw_key() {
+        let encrypted = encrypt_paste("hello").unwrap();
+        let key_bytes = URL_SAFE_NO_PAD.decode(&encrypted.key_b64).unwrap();
+        assert_eq!(key_bytes.len(), 16);
+    }
 }

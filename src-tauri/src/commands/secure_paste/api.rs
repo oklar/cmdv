@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use zeroize::Zeroize;
 
-use super::{api_base_url, MAX_PASTE_BYTES};
+use super::api_base_url;
 
 static HTTP: OnceLock<Client> = OnceLock::new();
 
@@ -32,11 +32,11 @@ struct AddClipboardResponse {
     url: String,
 }
 
-pub async fn upload_ciphertext(data_b64: &str) -> Result<String, String> {
-    if data_b64.len() > MAX_PASTE_BYTES * 4 / 3 + 64 {
-        return Err("Encrypted payload is too large.".into());
-    }
+pub(crate) fn clipboard_request_body(data_b64: &str) -> serde_json::Value {
+    serde_json::json!({ "data": data_b64 })
+}
 
+pub async fn upload_ciphertext(data_b64: &str) -> Result<String, String> {
     let base = api_base_url();
     let mut csrf = fetch_csrf_token(base).await?;
 
@@ -44,7 +44,7 @@ pub async fn upload_ciphertext(data_b64: &str) -> Result<String, String> {
         .post(format!("{base}/clipboard"))
         .header("Content-Type", "application/json")
         .header("X-XSRF-TOKEN", &csrf)
-        .json(&serde_json::json!({ "data": data_b64 }))
+        .json(&clipboard_request_body(data_b64))
         .send()
         .await
         .map_err(|e| format!("Network error: {e}"))?;
@@ -78,4 +78,15 @@ async fn fetch_csrf_token(base: &str) -> Result<String, String> {
 
     let parsed: CsrfResponse = res.json().await.map_err(|e| e.to_string())?;
     Ok(parsed.request_token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_request_body_matches_api_contract() {
+        let body = clipboard_request_body("abc123+/=");
+        assert_eq!(body["data"].as_str(), Some("abc123+/="));
+    }
 }
