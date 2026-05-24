@@ -1,0 +1,41 @@
+# Advisories that cannot be resolved directly — all are transitive deps
+# pulled in by the Tauri 2 framework or its deep dependency tree.
+#
+# Re-evaluate on every Tauri major/minor bump.
+
+[advisories]
+ignore = [
+    #
+    # ── Tauri 2 / GTK3 on Linux ──────────────────────────────────────────
+    # Tauri 2 targets webkit2gtk-4.1 which depends on GTK3 bindings.
+    # Migrating to GTK4 requires upstream Tauri support (tracked for Tauri v3).
+    #
+    "RUSTSEC-2024-0413", # atk — unmaintained (GTK3)
+    "RUSTSEC-2024-0416", # atk-sys — unmaintained (GTK3)
+    "RUSTSEC-2024-0412", # gdk — unmaintained (GTK3)
+    "RUSTSEC-2024-0418", # gdk-sys — unmaintained (GTK3)
+    "RUSTSEC-2024-0411", # gdkwayland-sys — unmaintained (GTK3)
+    "RUSTSEC-2024-0417", # gdkx11 — unmaintained (GTK3)
+    "RUSTSEC-2024-0414", # gdkx11-sys — unmaintained (GTK3)
+    "RUSTSEC-2024-0415", # gtk — unmaintained (GTK3)
+    "RUSTSEC-2024-0420", # gtk-sys — unmaintained (GTK3)
+    "RUSTSEC-2024-0419", # gtk3-macros — unmaintained (GTK3)
+    "RUSTSEC-2024-0429", # glib — unsound VariantStrIter (GTK3 binding)
+    "RUSTSEC-2024-0370", # proc-macro-error — unmaintained (used by glib-macros, gtk3-macros)
+
+    #
+    # ── Transitive deps with no patched version available ────────────────
+    #
+    "RUSTSEC-2026-0097", # rand — unsound with custom logger + thread_rng reseed (extremely narrow trigger)
+    "RUSTSEC-2024-0436", # paste — unmaintained (transitive via rav1e image codec)
+
+    #
+    # ── unic-* crates (transitive, unmaintained) ─────────────────────────
+    # May appear on Linux CI builds via platform-specific dep paths.
+    #
+    "RUSTSEC-2025-0081", # unic-char-property
+    "RUSTSEC-2025-0075", # unic-char-range
+    "RUSTSEC-2025-0080", # unic-common
+    "RUSTSEC-2025-0100", # unic-ucd-ident
+    "RUSTSEC-2025-0098", # unic-ucd-version
+]
