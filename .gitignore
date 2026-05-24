@@ -10,7 +10,6 @@ pnpm-debug.log*
 # Rust / Tauri
 src-tauri/target/
 src-tauri/gen/
-src-tauri/Cargo.lock
 
 # C# / .NET
 api/**/bin/
