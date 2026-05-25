@@ -9,6 +9,21 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/oklar/cmdv/actions/workflows/ci.yml"><img src="https://github.com/oklar/cmdv/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/oklar/cmdv/actions/workflows/release.yml"><img src="https://github.com/oklar/cmdv/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
+  <a href="https://github.com/oklar/cmdv/releases/latest"><img src="https://img.shields.io/github/v/release/oklar/cmdv" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/oklar/cmdv" alt="MIT License" /></a>
+</p>
+
+<p align="center">
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2" /></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" /></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-stable-orange?logo=rust&logoColor=white" alt="Rust" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078D6" alt="Windows and Linux" />
+  <img src="https://img.shields.io/badge/storage-SQLCipher-003B57" alt="SQLCipher" />
+</p>
+
+<p align="center">
   <a href="https://github.com/oklar/cmdv/releases/latest">Download</a> ·
   <a href="#features">Features</a> ·
   <a href="#development">Development</a>
@@ -113,7 +128,3 @@ git push --tags
 5. Review the draft on GitHub, then publish
 
 Existing users receive the update automatically on next app launch.
-
-## License
-
-[MIT](LICENSE)
