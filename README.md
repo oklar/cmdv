@@ -113,18 +113,30 @@ Bundles are output to `src-tauri/target/release/bundle/`.
 
 ## Releasing
 
-Releases are automated via GitHub Actions. To publish a new version:
+Releases are automated via GitHub Actions ([Release workflow](https://github.com/oklar/cmdv/actions/workflows/release.yml)). Pushing to `main` only runs CI — **Release runs when you push a tag**.
+
+To publish a new version:
 
 1. Bump `version` in `src-tauri/tauri.conf.json`
 2. Commit the change
-3. Tag and push:
+3. Push the commit, then tag **that commit** and push the tag (tag name must match the config, e.g. `"0.9.4"` → `v0.9.4`):
 
 ```bash
-git tag v0.1.0
-git push --tags
+git push origin main
+git tag v0.9.4
+git push origin v0.9.4
 ```
 
-4. GitHub Actions builds Windows + Linux artifacts and creates a **draft** release
+4. The **Release** workflow builds Windows + Linux artifacts and creates a **draft** release (~15–20 min)
 5. Review the draft on GitHub, then publish
 
 Existing users receive the update automatically on next app launch.
+
+Avoid `git push --tags` for releases — it pushes every local tag and is easy to tag the wrong commit before the version bump is on `main`. To re-trigger a release after fixing a tag, delete it on the remote and push again:
+
+```bash
+git push origin :refs/tags/v0.9.4
+git tag -d v0.9.4
+git tag v0.9.4
+git push origin v0.9.4
+```
