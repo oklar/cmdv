@@ -144,14 +144,47 @@ fn apply_autostart_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn setup_deep_link_handler(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri_plugin_deep_link::DeepLinkExt;
+
+    let handle = app.handle().clone();
+    app.deep_link().on_open_url(move |event| {
+        let urls: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
+        commands::secure_paste::handle_deep_link_urls(&handle, &urls);
+    });
+
+    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(debug_assertions)]
+    {
+        app.deep_link().register_all()?;
+    }
+
+    if let Ok(Some(urls)) = app.deep_link().get_current() {
+        let urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+        commands::secure_paste::handle_deep_link_urls(app.handle(), &urls);
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
+            // With the `deep-link` feature, URLs are delivered via `on_open_url`.
+        }));
+    }
+
+    builder
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .args(["--tray"])
                 .build(),
         )
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
@@ -269,6 +302,9 @@ pub fn run() {
                      Another app may be using it."
                 );
             }
+
+            #[cfg(desktop)]
+            setup_deep_link_handler(app)?;
 
             Ok(())
         })

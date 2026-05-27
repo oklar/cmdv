@@ -84,6 +84,8 @@ windows-sys = { version = "0.59", features = [
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

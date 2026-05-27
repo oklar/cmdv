@@ -32,6 +32,11 @@ struct AddClipboardResponse {
     url: String,
 }
 
+#[derive(Deserialize)]
+struct DeleteClipboardResponse {
+    data: String,
+}
+
 pub(crate) fn clipboard_request_body(data_b64: &str) -> serde_json::Value {
     serde_json::json!({ "data": data_b64 })
 }
@@ -63,6 +68,35 @@ pub async fn upload_ciphertext(data_b64: &str) -> Result<String, String> {
 
     let parsed: AddClipboardResponse = res.json().await.map_err(|e| e.to_string())?;
     Ok(parsed.url)
+}
+
+pub async fn fetch_ciphertext(id: &str) -> Result<String, String> {
+    let base = api_base_url();
+    let mut csrf = fetch_csrf_token(base).await?;
+
+    let res = http()
+        .delete(format!("{base}/clipboard/{id}"))
+        .header("X-XSRF-TOKEN", &csrf)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+
+    csrf.zeroize();
+
+    if res.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err("This paste has already been read, expired, or does not exist.".into());
+    }
+    if res.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err("Rate limited — try again in a minute.".into());
+    }
+    if !res.status().is_success() {
+        let status = res.status();
+        log::warn!("DELETE /clipboard/{id} failed: {status}");
+        return Err(format!("Server returned {status}"));
+    }
+
+    let parsed: DeleteClipboardResponse = res.json().await.map_err(|e| e.to_string())?;
+    Ok(parsed.data)
 }
 
 async fn fetch_csrf_token(base: &str) -> Result<String, String> {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { ClipboardList } from "./components/ClipboardList";
@@ -6,6 +6,7 @@ import { SearchBar } from "./components/SearchBar";
 import { Settings } from "./components/Settings";
 import { SetupWizard } from "./components/SetupWizard";
 import { AppLock } from "./components/AppLock";
+import { PasteReveal } from "./components/PasteReveal";
 import appIcon from "./assets/icon.png";
 
 type AppState = "loading" | "setup" | "locked" | "unlocked";
@@ -46,16 +47,16 @@ export default function App() {
     getVersion().then(setVersion).catch(() => {});
   }, []);
 
+  let content: ReactNode;
+
   if (appState === "loading") {
-    return (
+    content = (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
       </div>
     );
-  }
-
-  if (appState === "setup") {
-    return (
+  } else if (appState === "setup") {
+    content = (
       <SetupWizard
         onComplete={() => {
           invoke("finish_setup");
@@ -63,13 +64,10 @@ export default function App() {
         }}
       />
     );
-  }
-
-  if (appState === "locked") {
-    return <AppLock onUnlock={() => setAppState("unlocked")} />;
-  }
-
-  return (
+  } else if (appState === "locked") {
+    content = <AppLock onUnlock={() => setAppState("unlocked")} />;
+  } else {
+    content = (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-row min-h-0">
         <div className="flex-1 flex flex-col min-w-0">
@@ -166,5 +164,13 @@ export default function App() {
         </span>
       </div>
     </div>
+    );
+  }
+
+  return (
+    <>
+      <PasteReveal />
+      {content}
+    </>
   );
 }

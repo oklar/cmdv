@@ -36,7 +36,7 @@
 - **Clipboard history** — automatically captures text and images you copy
 - **Encrypted vault** — history is stored in a SQLCipher database; keys live in the OS keychain (Windows Credential Manager / Linux Secret Service)
 - **Vault password + recovery phrase** — BIP-39 mnemonic for recovery and device pairing (QR)
-- **Secure paste** — hotkey (Ctrl+Shift+C) creates a one-time encrypted link; ciphertext is uploaded, the decryption key stays in the URL fragment (not sent to the server)
+- **Secure paste** — hotkey (Ctrl+Shift+C) creates a one-time encrypted link; ciphertext is uploaded, the decryption key stays in the URL fragment (not sent to the server). Paste links opened in a browser can hand off to the desktop app via `cmdv://`
 - **Password-manager awareness** — skips capture when the foreground app is a known password manager (Windows)
 - **Search and filter** — full-text search with content type filtering and favorites
 - **Encrypted backup** — export and import an encrypted blob of your history (manual sync between devices today)
@@ -48,6 +48,9 @@
 
 - **Cloud sync** — optional sync across devices; client-side encryption before upload (zero-knowledge on the server)
 - **File clipboard** — capture file paths from the clipboard
+- **macOS Universal Links** — associate `cmdv.to` directly with the app (Apple entitlements + `.well-known/apple-app-site-association`)
+- **Mobile deep links** — `tauri-plugin-deep-link` supports verified HTTPS on iOS/Android
+- **Deep link URL versioning** — backward compat strategy if `cmdv://` format evolves
 
 ## Architecture
 

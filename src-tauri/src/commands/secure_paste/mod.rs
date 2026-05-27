@@ -1,4 +1,7 @@
 mod api;
+mod reveal;
+
+pub use reveal::handle_deep_link_urls;
 
 use std::sync::atomic::Ordering;
 use std::sync::Arc;

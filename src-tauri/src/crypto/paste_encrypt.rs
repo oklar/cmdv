@@ -37,6 +37,32 @@ pub fn encrypt_paste(plaintext: &str) -> Result<PasteEncrypted, String> {
     Ok(PasteEncrypted { data_b64, key_b64 })
 }
 
+/// Decrypt paste ciphertext compatible with web `encryptService.ts` (IV || ciphertext, raw key).
+pub fn decrypt_paste(data_b64: &str, key_b64: &str) -> Result<String, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes128Gcm, Nonce};
+
+    let blob = STANDARD.decode(data_b64).map_err(|e| e.to_string())?;
+    if blob.len() < 12 {
+        return Err("Invalid ciphertext".into());
+    }
+    let (nonce_bytes, ct) = blob.split_at(12);
+    let mut key_bytes = URL_SAFE_NO_PAD.decode(key_b64).map_err(|e| e.to_string())?;
+    if key_bytes.len() != 16 {
+        key_bytes.zeroize();
+        return Err("Invalid encryption key".into());
+    }
+
+    let cipher = Aes128Gcm::new_from_slice(&key_bytes).map_err(|e| e.to_string())?;
+    key_bytes.zeroize();
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, ct)
+        .map_err(|_| "Decryption failed — link may be invalid or already read.".to_string())?;
+
+    String::from_utf8(plaintext).map_err(|_| "Decrypted data is not valid UTF-8".into())
+}
+
 #[cfg(test)]
 mod tests {
     use base64::Engine;
@@ -45,18 +71,10 @@ mod tests {
 
     #[test]
     fn rust_encrypt_decrypt_roundtrip() {
-        use aes_gcm::aead::{Aead, KeyInit};
-        use aes_gcm::{Aes128Gcm, Nonce};
-
         let plain = "hello from cmdv";
         let enc = encrypt_paste(plain).unwrap();
-        let blob = STANDARD.decode(&enc.data_b64).unwrap();
-        let (nonce_bytes, ct) = blob.split_at(12);
-        let key_bytes = URL_SAFE_NO_PAD.decode(&enc.key_b64).unwrap();
-        let cipher = Aes128Gcm::new_from_slice(&key_bytes).unwrap();
-        let nonce = Nonce::from_slice(nonce_bytes);
-        let dec = cipher.decrypt(nonce, ct).unwrap();
-        assert_eq!(std::str::from_utf8(&dec).unwrap(), plain);
+        let dec = decrypt_paste(&enc.data_b64, &enc.key_b64).unwrap();
+        assert_eq!(dec, plain);
     }
 
     #[test]
