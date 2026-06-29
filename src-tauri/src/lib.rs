@@ -185,6 +185,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_dialog::init())
@@ -286,6 +287,9 @@ pub fn run() {
             let vault = Arc::new(VaultState::new());
             app.manage(vault);
 
+            // --- Desktop account session (web login via loopback + PKCE) ---
+            app.manage(commands::account_auth::AuthState::new());
+
             // --- Global shortcuts (after vault is managed) ---
             let gs = app.global_shortcut();
 
@@ -360,6 +364,10 @@ pub fn run() {
             commands::clipboard::copy_entry_to_clipboard,
             commands::clipboard::simulate_paste,
             commands::secure_paste::create_secure_paste,
+            commands::account_auth::begin_desktop_login,
+            commands::account_auth::get_account_status,
+            commands::account_auth::fetch_account,
+            commands::account_auth::desktop_logout,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::vault::get_vault_status,

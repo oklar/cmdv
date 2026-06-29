@@ -6,6 +6,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 import { disable, enable } from "@tauri-apps/plugin-autostart";
 import { QrPairing } from "./QrPairing";
+import { AccountPanel } from "./AccountPanel";
 
 interface AppSettings {
   poll_interval_ms: number;
@@ -63,6 +64,8 @@ export function Settings() {
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      <AccountPanel />
+
       {stats && (
         <section>
           <h2 className="text-sm font-medium text-zinc-300 mb-2">Storage</h2>

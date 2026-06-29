@@ -64,6 +64,11 @@ hex = "0.4"
 # Secure paste API
 reqwest = { version = "0.12", default-features = false, features = ["cookies", "json", "rustls-tls"] }
 
+# Account login (loopback OAuth + browser opener + URL parsing)
+tauri-plugin-oauth = "2"
+tauri-plugin-opener = "2"
+url = "2"
+
 # Notifications
 notify-rust = "4"
 subtle = "2.6.1"
