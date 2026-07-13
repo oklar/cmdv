@@ -88,27 +88,29 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             <div>
               <h1 className="text-2xl font-bold">Welcome to CMDV</h1>
               <p className="text-zinc-400 mt-2 text-sm">
-                Your encrypted clipboard manager. Everything is encrypted
-                locally with a key only you control. We'll generate that key and
-                show you a 24-word recovery phrase to back it up.
+                Use the same recovery phrase on every device to share data
+                through cloud sync or export/import.
               </p>
             </div>
-            <button
-              onClick={handleCreateVault}
-              disabled={loading}
-              className="w-full py-2.5 bg-lime-600 hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-md transition-colors"
-            >
-              {loading ? "Creating vault..." : "Create vault"}
-            </button>
-            <button
-              onClick={() => {
-                setError("");
-                setStep("restore");
-              }}
-              className="w-full py-2.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
-              Restore from recovery phrase
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleCreateVault}
+                disabled={loading}
+                className="flex-1 py-2.5 bg-lime-600 hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-md transition-colors"
+              >
+                {loading ? "Creating..." : "Create new vault"}
+              </button>
+              <button
+                onClick={() => {
+                  setError("");
+                  setStep("restore");
+                }}
+                disabled={loading}
+                className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:text-zinc-600 text-zinc-300 font-medium rounded-md transition-colors"
+              >
+                Restore from recovery phrase
+              </button>
+            </div>
             {error && <p className="text-red-400 text-xs">{error}</p>}
           </div>
         )}

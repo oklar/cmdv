@@ -278,7 +278,7 @@ fn merge_downloaded(
     let _ = std::fs::remove_file(&path);
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
 
-    let remote_entries = {
+    let remote_entries = (|| -> Result<Vec<crate::db::entries::ClipboardEntry>, String> {
         let conn = Connection::open(&path).map_err(|e| e.to_string())?;
         let mut hex_key = hex::encode(db_key);
         let mut pragma = format!("PRAGMA key = \"x'{}'\";", hex_key);
@@ -286,10 +286,17 @@ fn merge_downloaded(
         let keyed = conn.execute_batch(&pragma);
         pragma.zeroize();
         keyed.map_err(|e| format!("Failed to open pulled snapshot: {}", e))?;
-        crate::db::entries::get_all_entries(&conn).map_err(|e| e.to_string())?
-    };
-    let _ = std::fs::remove_file(&path);
+        Ok(crate::db::entries::get_all_entries(&conn).map_err(|e| e.to_string())?)
+    })()
+    .map_err(|_| {
+        "Your cloud backup was encrypted with a different recovery phrase than this device's \
+         vault. Restore from that phrase to sync (reset the vault, then choose Restore from \
+         recovery phrase)."
+            .to_string()
+    });
     db_key.zeroize();
+    let _ = std::fs::remove_file(&path);
+    let remote_entries = remote_entries?;
 
     let remote_sync: Vec<SyncEntry> = remote_entries.iter().map(SyncEntry::from).collect();
     let local = db.get_all_entries().map_err(|e| e.to_string())?;

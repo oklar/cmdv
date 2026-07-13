@@ -178,7 +178,10 @@ export function Settings() {
               Export
             </button>
           </SettingRow>
-          <SettingRow label="Import" description="Restore from backup">
+          <SettingRow
+            label="Import"
+            description="Restore from backup using the same recovery phrase"
+          >
             <button
               onClick={async () => {
                 const path = await open({

@@ -432,7 +432,12 @@ pub fn import_database(
     drop(guard);
 
     let data = std::fs::read(&path).map_err(|e| format!("Failed to read import file: {}", e))?;
-    let blob = crate::sync::blob::decrypt_blob(&blob_key, &data)?;
+    let blob = crate::sync::blob::decrypt_blob(&blob_key, &data).map_err(|_| {
+        "Could not decrypt this backup. It was created on a device with a different recovery \
+         phrase. On this device, reset the vault, choose Restore from recovery phrase, then \
+         import again. A damaged file can also cause this."
+            .to_string()
+    })?;
 
     let local_entries = db.get_all_entries().map_err(|e| e.to_string())?;
     let merged = crate::sync::conflict::merge_entries(&local_entries, &blob.entries);
