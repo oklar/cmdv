@@ -2,17 +2,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
 use bip39::Mnemonic;
 use serde::Serialize;
 use tauri::{Manager, State};
 use zeroize::Zeroize;
 
 use crate::clipboard;
-use crate::crypto::keys::{
-    derive_wrapping_key, hash_password, unwrap_master_key, verify_password, wrap_master_key,
-    AppKeys, MasterKey, VaultState,
-};
+use crate::crypto::keys::{AppKeys, MasterKey, VaultState};
 use crate::db::settings::SettingsDb;
 use crate::db::Database;
 use crate::storage::keychain::KeychainStore;
@@ -34,9 +30,8 @@ pub struct SetupResult {
 #[tauri::command]
 pub fn get_vault_status(
     vault: State<'_, Arc<VaultState>>,
-    settings_db: State<'_, Arc<SettingsDb>>,
 ) -> Result<VaultStatus, String> {
-    let setup_complete = settings_db.get_value("vault_encrypted_master_key").is_some();
+    let setup_complete = KeychainStore::new().exists()?;
     let locked = vault.keys.lock().map_err(|_| "Lock poisoned")?.is_none();
     Ok(VaultStatus {
         setup_complete,
@@ -46,19 +41,10 @@ pub fn get_vault_status(
 
 #[tauri::command]
 pub fn setup_vault(
-    password: String,
     vault: State<'_, Arc<VaultState>>,
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<SetupResult, String> {
-    if settings_db.get_value("vault_encrypted_master_key").is_some() {
-        return Err("Vault already exists".into());
-    }
-
-    if password.len() < 8 {
-        return Err("Password must be at least 8 characters".into());
-    }
-
     let keychain = KeychainStore::new();
     let master_key = match keychain.exists() {
         Ok(true) => {
@@ -66,7 +52,7 @@ pub fn setup_vault(
             let mut bytes = [0u8; 32];
             bytes.copy_from_slice(&seed[..32]);
             seed.zeroize();
-            log::info!("Migrating existing master key from keychain");
+            log::info!("Reusing existing master key from keychain");
             let mk = MasterKey::from_bytes(bytes);
             bytes.zeroize();
             mk
@@ -79,24 +65,12 @@ pub fn setup_vault(
 
     let mnemonic =
         Mnemonic::from_entropy(master_key.as_bytes()).map_err(|e| format!("BIP39 error: {}", e))?;
-    let mut mnemonic_entropy = mnemonic.to_entropy();
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
-
-    let wrapping_key = derive_wrapping_key(&password, &mnemonic_entropy)?;
-    let wrapped = wrap_master_key(&wrapping_key, &master_key)?;
-
-    let (pw_hash, pw_salt) = hash_password(&password)?;
-
-    mnemonic_entropy.zeroize();
-
-    settings_db.set_value("vault_encrypted_master_key", &B64.encode(&wrapped))?;
-    settings_db.set_value("vault_password_hash", &B64.encode(pw_hash))?;
-    settings_db.set_value("vault_password_salt", &B64.encode(pw_salt))?;
-
-    keychain.save_seed(master_key.as_bytes())?;
 
     let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
     db.set_encryption_key(&app_keys.db_key)?;
+    keychain.save_seed(master_key.as_bytes())?;
+
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
     start_monitoring(&vault, &db, &settings_db);
@@ -111,73 +85,16 @@ pub fn finish_setup(vault: State<'_, Arc<VaultState>>) {
     log::info!("Setup flow finished, auto-hide enabled");
 }
 
-#[tauri::command]
-pub fn unlock_vault(
-    password: String,
-    vault: State<'_, Arc<VaultState>>,
-    settings_db: State<'_, Arc<SettingsDb>>,
-    db: State<'_, Arc<Database>>,
-) -> Result<(), String> {
-    let stored_hash_b64 = settings_db
-        .get_value("vault_password_hash")
-        .ok_or("Vault not set up")?;
-    let stored_salt_b64 = settings_db
-        .get_value("vault_password_salt")
-        .ok_or("Vault not set up")?;
-
-    let stored_hash_vec = B64.decode(&stored_hash_b64).map_err(|e| e.to_string())?;
-    let stored_salt_vec = B64.decode(&stored_salt_b64).map_err(|e| e.to_string())?;
-
-    let mut stored_hash = [0u8; 32];
-    let mut stored_salt = [0u8; 32];
-    stored_hash.copy_from_slice(&stored_hash_vec);
-    stored_salt.copy_from_slice(&stored_salt_vec);
-
-    if !verify_password(&password, &stored_hash, &stored_salt)? {
-        return Err("Wrong password".into());
-    }
-
-    let keychain = KeychainStore::new();
-    match keychain.load_seed() {
-        Ok(mut seed) => {
-            let mut bytes = [0u8; 32];
-            bytes.copy_from_slice(&seed[..32]);
-            seed.zeroize();
-            let master_key = MasterKey::from_bytes(bytes);
-            bytes.zeroize();
-
-            let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
-            db.set_encryption_key(&app_keys.db_key)?;
-            *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
-
-            start_monitoring(&vault, &db, &settings_db);
-            vault.setup_complete.store(true, Ordering::Relaxed);
-            log::info!("Vault unlocked via keychain");
-            Ok(())
-        }
-        Err(_) => Err("NEEDS_RECOVERY".into()),
-    }
-}
-
-/// Auto-unlock without password if `require_password_on_open` is disabled.
-/// Returns true if the vault was unlocked, false if a password is still needed.
+/// Auto-unlock from the keychain-stored master key. Returns true if the vault was unlocked,
+/// false if the keychain has no seed (e.g. a new device that needs recovery).
 #[tauri::command]
 pub fn try_auto_unlock(
     vault: State<'_, Arc<VaultState>>,
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<bool, String> {
-    if settings_db.get_value("vault_encrypted_master_key").is_none() {
-        return Ok(false);
-    }
-
     if vault.keys.lock().map_err(|_| "Lock poisoned")?.is_some() {
         return Ok(true);
-    }
-
-    let settings = settings_db.get_settings();
-    if settings.require_password_on_open {
-        return Ok(false);
     }
 
     let keychain = KeychainStore::new();
@@ -195,59 +112,48 @@ pub fn try_auto_unlock(
 
             start_monitoring(&vault, &db, &settings_db);
             vault.setup_complete.store(true, Ordering::Relaxed);
-            log::info!("Vault auto-unlocked (lock screen disabled)");
+            log::info!("Vault auto-unlocked from keychain");
             Ok(true)
         }
         Err(_) => Ok(false),
     }
 }
 
+/// Restore the vault on a device whose keychain seed is missing (new device or keychain loss)
+/// by reconstructing the master key directly from the 24-word recovery phrase.
 #[tauri::command]
 pub fn recover_vault(
-    password: String,
     mnemonic_words: String,
     vault: State<'_, Arc<VaultState>>,
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<(), String> {
-    let stored_hash_b64 = settings_db
-        .get_value("vault_password_hash")
-        .ok_or("Vault not set up")?;
-    let stored_salt_b64 = settings_db
-        .get_value("vault_password_salt")
-        .ok_or("Vault not set up")?;
-
-    let mut stored_hash = [0u8; 32];
-    let mut stored_salt = [0u8; 32];
-    stored_hash.copy_from_slice(&B64.decode(&stored_hash_b64).map_err(|e| e.to_string())?[..32]);
-    stored_salt.copy_from_slice(&B64.decode(&stored_salt_b64).map_err(|e| e.to_string())?[..32]);
-
-    if !verify_password(&password, &stored_hash, &stored_salt)? {
-        return Err("Wrong password".into());
+    let mnemonic = Mnemonic::parse_normalized(mnemonic_words.trim())
+        .map_err(|e| format!("Invalid recovery phrase: {}", e))?;
+    let mut entropy = mnemonic.to_entropy();
+    if entropy.len() != 32 {
+        entropy.zeroize();
+        return Err("Recovery phrase must be 24 words".into());
     }
 
-    let mnemonic = Mnemonic::parse_normalized(&mnemonic_words)
-        .map_err(|e| format!("Invalid mnemonic: {}", e))?;
-    let mut mnemonic_entropy = mnemonic.to_entropy();
-
-    let wrapped_b64 = settings_db
-        .get_value("vault_encrypted_master_key")
-        .ok_or("No encrypted master key found")?;
-    let wrapped = B64.decode(&wrapped_b64).map_err(|e| e.to_string())?;
-
-    let wrapping_key = derive_wrapping_key(&password, &mnemonic_entropy)?;
-    mnemonic_entropy.zeroize();
-    let master_key = unwrap_master_key(&wrapping_key, &wrapped)?;
-
-    let keychain = KeychainStore::new();
-    keychain.save_seed(master_key.as_bytes())?;
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&entropy);
+    entropy.zeroize();
+    let master_key = MasterKey::from_bytes(bytes);
+    bytes.zeroize();
 
     let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
+
+    // Validate the key against the local DB (if any) before persisting it, so a wrong phrase
+    // can't poison the keychain and lock the user out on the next launch.
     db.set_encryption_key(&app_keys.db_key)?;
+    KeychainStore::new().save_seed(master_key.as_bytes())?;
+
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
     start_monitoring(&vault, &db, &settings_db);
-    log::info!("Vault recovered via mnemonic");
+    vault.setup_complete.store(true, Ordering::Relaxed);
+    log::info!("Vault recovered via recovery phrase");
     Ok(())
 }
 
@@ -263,7 +169,6 @@ pub fn lock_vault(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
 pub fn reset_vault(
     app: tauri::AppHandle,
     vault: State<'_, Arc<VaultState>>,
-    settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<(), String> {
     vault.monitor_stop.store(true, Ordering::Relaxed);
@@ -289,14 +194,6 @@ pub fn reset_vault(
         }
     }
 
-    for key in &[
-        "vault_encrypted_master_key",
-        "vault_password_hash",
-        "vault_password_salt",
-    ] {
-        settings_db.delete_value(key).ok();
-    }
-
     log::info!("Vault reset complete — exiting app");
     app.exit(0);
     Ok(())
@@ -316,14 +213,13 @@ fn generate_txt(words: &[String]) -> String {
     let mut out = String::new();
     out.push_str("CMDV Recovery Phrase\n");
     out.push_str("===================\n\n");
-    out.push_str("Keep this file in a safe place. You need these 24 words\n");
-    out.push_str("plus your vault password to recover your data.\n\n");
+    out.push_str("Keep this file in a safe place. These 24 words are the key\n");
+    out.push_str("to your data — you need them to restore CMDV on a new device.\n\n");
     for (i, word) in words.iter().enumerate() {
         out.push_str(&format!("{:>2}. {}\n", i + 1, word));
     }
-    out.push_str("\nWARNING: Anyone with these words and your password can\n");
-    out.push_str("decrypt your clipboard data. Delete this file after\n");
-    out.push_str("storing the phrase securely.\n");
+    out.push_str("\nWARNING: Anyone with these words can decrypt your clipboard\n");
+    out.push_str("data. Delete this file after storing the phrase securely.\n");
     out
 }
 
@@ -331,8 +227,8 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::new();
     lines.push("CMDV Recovery Kit".into());
     lines.push(String::new());
-    lines.push("Keep this document in a safe place. You need these 24 words".into());
-    lines.push("plus your vault password to recover your data.".into());
+    lines.push("Keep this document in a safe place. These 24 words are the key".into());
+    lines.push("to your data — you need them to restore CMDV on a new device.".into());
     lines.push(String::new());
 
     for (chunk_idx, chunk) in words.chunks(4).enumerate() {
@@ -347,11 +243,8 @@ fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
     }
 
     lines.push(String::new());
-    lines.push("Vault Password: ________________________________________".into());
-    lines.push(String::new());
-    lines.push("WARNING: Anyone with these words and your password can".into());
-    lines.push("decrypt your clipboard data. Delete this file after".into());
-    lines.push("storing the phrase securely.".into());
+    lines.push("WARNING: Anyone with these words can decrypt your clipboard".into());
+    lines.push("data. Delete this file after storing the phrase securely.".into());
 
     let font_size = 11;
     let title_size = 18;

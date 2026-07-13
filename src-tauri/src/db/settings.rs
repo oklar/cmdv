@@ -10,7 +10,6 @@ pub struct AppSettings {
     pub max_total_size_bytes: i64,
     pub webp_quality: f32,
     pub excluded_apps: Vec<String>,
-    pub require_password_on_open: bool,
     pub login_autostart: bool,
 }
 
@@ -28,7 +27,6 @@ impl Default for AppSettings {
                 "keepassxc".into(),
                 "lastpass".into(),
             ],
-            require_password_on_open: false,
             login_autostart: true,
         }
     }

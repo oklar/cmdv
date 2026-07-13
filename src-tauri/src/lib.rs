@@ -378,7 +378,6 @@ pub fn run() {
             commands::vault::get_vault_status,
             commands::vault::setup_vault,
             commands::vault::finish_setup,
-            commands::vault::unlock_vault,
             commands::vault::try_auto_unlock,
             commands::vault::recover_vault,
             commands::vault::lock_vault,

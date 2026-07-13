@@ -15,7 +15,6 @@ interface AppSettings {
   max_total_size_bytes: number;
   webp_quality: number;
   excluded_apps: string[];
-  require_password_on_open: boolean;
   login_autostart: boolean;
 }
 
@@ -110,30 +109,6 @@ export function Settings() {
               className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
             >
               Show QR
-            </button>
-          </SettingRow>
-          <SettingRow
-            label="Require password on open"
-            description="Show lock screen each time the app starts"
-          >
-            <button
-              onClick={() =>
-                saveSettings({
-                  ...settings,
-                  require_password_on_open: !settings.require_password_on_open,
-                })
-              }
-              className={`relative w-10 h-5 rounded-full transition-colors ${
-                settings.require_password_on_open
-                  ? "bg-lime-500"
-                  : "bg-zinc-700"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  settings.require_password_on_open ? "translate-x-5" : ""
-                }`}
-              />
             </button>
           </SettingRow>
         </div>
