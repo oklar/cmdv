@@ -153,4 +153,41 @@ impl Database {
             .execute_batch("DELETE FROM entries;")?;
         Ok(())
     }
+
+    /// Produce a consistent, encrypted snapshot of the live DB at `dst_path` using the SQLite
+    /// online backup API. The destination is keyed with `key` (same SQLCipher key), so the
+    /// resulting file is a self-contained encrypted `cmdv.db`. Returns the snapshot byte size.
+    ///
+    /// The backup API copies committed pages, sidestepping WAL/checkpoint concerns.
+    pub fn backup_to_encrypted(&self, dst_path: &Path, key: &[u8; 32]) -> Result<u64, String> {
+        use zeroize::Zeroize;
+
+        // Overwrite any stale snapshot so backup starts from an empty destination.
+        let _ = std::fs::remove_file(dst_path);
+
+        let guard = self.conn().map_err(|e| e.to_string())?;
+        let src = guard.as_ref().unwrap();
+
+        let mut dst = Connection::open(dst_path).map_err(|e| e.to_string())?;
+        let mut hex_key = hex::encode(key);
+        let mut pragma = format!("PRAGMA key = \"x'{}'\";", hex_key);
+        hex_key.zeroize();
+        let key_result = dst.execute_batch(&pragma);
+        pragma.zeroize();
+        key_result.map_err(|e| format!("Failed to key snapshot: {}", e))?;
+
+        {
+            let backup =
+                rusqlite::backup::Backup::new(src, &mut dst).map_err(|e| e.to_string())?;
+            backup
+                .run_to_completion(100, std::time::Duration::from_millis(0), None)
+                .map_err(|e| format!("Backup failed: {}", e))?;
+        }
+
+        dst.close().map_err(|(_, e)| e.to_string())?;
+
+        std::fs::metadata(dst_path)
+            .map(|m| m.len())
+            .map_err(|e| e.to_string())
+    }
 }

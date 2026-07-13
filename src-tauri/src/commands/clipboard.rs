@@ -117,7 +117,9 @@ pub fn toggle_favorite(
     id: String,
 ) -> Result<bool, String> {
     vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
-    db.toggle_favorite(&id).map_err(|e| e.to_string())
+    let result = db.toggle_favorite(&id).map_err(|e| e.to_string())?;
+    crate::commands::sync::trigger_sync();
+    Ok(result)
 }
 
 #[tauri::command]
@@ -127,7 +129,9 @@ pub fn delete_entry(
     id: String,
 ) -> Result<(), String> {
     vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
-    db.delete_entry(&id).map_err(|e| e.to_string())
+    db.delete_entry(&id).map_err(|e| e.to_string())?;
+    crate::commands::sync::trigger_sync();
+    Ok(())
 }
 
 #[tauri::command]
@@ -136,7 +140,9 @@ pub fn clear_all_entries(
     vault: State<'_, Arc<VaultState>>,
 ) -> Result<(), String> {
     vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
-    db.wipe_all().map_err(|e| e.to_string())
+    db.wipe_all().map_err(|e| e.to_string())?;
+    crate::commands::sync::trigger_sync();
+    Ok(())
 }
 
 #[tauri::command]

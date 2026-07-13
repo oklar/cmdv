@@ -290,6 +290,11 @@ pub fn run() {
             // --- Desktop account session (web login via loopback + PKCE) ---
             app.manage(commands::account_auth::AuthState::new());
 
+            // --- Cloud sync scheduler (debounced single-flight auto-sync) ---
+            let scheduler = Arc::new(commands::sync::SyncScheduler::new());
+            app.manage(scheduler.clone());
+            commands::sync::spawn_scheduler(app.handle().clone(), scheduler);
+
             // --- Global shortcuts (after vault is managed) ---
             let gs = app.global_shortcut();
 
@@ -382,6 +387,8 @@ pub fn run() {
             commands::vault::generate_pairing_qr,
             commands::vault::export_database,
             commands::vault::import_database,
+            commands::sync::sync_now,
+            commands::sync::get_sync_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -16,6 +17,14 @@ interface AppSettings {
   excluded_apps: string[];
   require_password_on_open: boolean;
   login_autostart: boolean;
+}
+
+interface SyncStatus {
+  // true = paid/entitled, false = not entitled, null = not yet checked
+  entitled: boolean | null;
+  syncing: boolean;
+  last_synced_at: string | null;
+  last_error: string | null;
 }
 
 export function Settings() {
@@ -65,6 +74,8 @@ export function Settings() {
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
       <AccountPanel />
+
+      <CloudSyncSection />
 
       {stats && (
         <section>
@@ -226,6 +237,95 @@ export function Settings() {
         <DevSection settings={settings} onSaveSettings={saveSettings} />
       )}
     </div>
+  );
+}
+
+function formatSyncedAt(millis: string | null): string {
+  if (!millis) return "Never synced";
+  const ms = Number(millis);
+  if (!Number.isFinite(ms) || ms <= 0) return "Never synced";
+  const date = new Date(ms);
+  const now = Date.now();
+  const diffSec = Math.round((now - ms) / 1000);
+  if (diffSec < 60) return "Synced just now";
+  if (diffSec < 3600) return `Synced ${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `Synced ${Math.floor(diffSec / 3600)}h ago`;
+  return `Synced ${date.toLocaleDateString()}`;
+}
+
+function CloudSyncSection() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [status, setStatus] = useState<SyncStatus | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unsubs: Array<() => void> = [];
+
+    invoke<{ logged_in: boolean }>("get_account_status")
+      .then((s) => !cancelled && setLoggedIn(s.logged_in))
+      .catch(() => {});
+
+    invoke<SyncStatus>("get_sync_status")
+      .then((s) => !cancelled && setStatus(s))
+      .catch(() => {});
+
+    void listen<SyncStatus>("sync-status", (event) => {
+      setStatus(event.payload);
+    }).then((fn) => unsubs.push(fn));
+
+    return () => {
+      cancelled = true;
+      for (const fn of unsubs) fn();
+    };
+  }, []);
+
+  const syncing = status?.syncing ?? false;
+  const lastError = status?.last_error ?? null;
+  const entitled = status?.entitled ?? null;
+
+  const handleSyncNow = async () => {
+    try {
+      const s = await invoke<SyncStatus>("sync_now");
+      setStatus(s);
+    } catch (err) {
+      setStatus((prev) => ({
+        entitled: prev?.entitled ?? null,
+        syncing: false,
+        last_synced_at: prev?.last_synced_at ?? null,
+        last_error: String(err),
+      }));
+    }
+  };
+
+  const description = !loggedIn
+    ? "Log in to use cloud sync"
+    : entitled === false
+      ? "Cloud sync is a paid feature"
+      : formatSyncedAt(status?.last_synced_at ?? null);
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-zinc-300 mb-2">Cloud Sync</h2>
+      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+        <SettingRow label="Automatic backup" description={description}>
+          <button
+            onClick={handleSyncNow}
+            disabled={!loggedIn || syncing}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+              !loggedIn || syncing
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+            }`}
+          >
+            {syncing ? "Syncing…" : "Sync now"}
+          </button>
+        </SettingRow>
+
+        {lastError && (
+          <div className="px-3 py-2 text-xs text-red-400">{lastError}</div>
+        )}
+      </div>
+    </section>
   );
 }
 

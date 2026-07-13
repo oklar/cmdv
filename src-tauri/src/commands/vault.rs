@@ -465,6 +465,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
                     Ok(Some(id)) => {
                         log::info!("Captured clipboard entry: {}", id);
                         enforce_storage_limit(&poll_db, max_total_size);
+                        crate::commands::sync::trigger_sync();
                     }
                     Ok(None) => {}
                     Err(e) => log::warn!("Clipboard poll error: {}", e),
@@ -562,6 +563,9 @@ pub fn import_database(
     }
 
     log::info!("Imported {} new entries from {}", imported, path);
+    if imported > 0 {
+        crate::commands::sync::trigger_sync();
+    }
     Ok(imported)
 }
 
@@ -602,7 +606,7 @@ pub fn generate_pairing_qr(vault: tauri::State<'_, Arc<VaultState>>) -> Result<S
     Ok(data_url)
 }
 
-fn enforce_storage_limit(db: &Database, max_total_size: i64) {
+pub(crate) fn enforce_storage_limit(db: &Database, max_total_size: i64) {
     let total = match db.get_total_size() {
         Ok(t) => t,
         Err(e) => {

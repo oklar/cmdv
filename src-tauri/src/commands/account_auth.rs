@@ -93,12 +93,15 @@ struct TokenResponse {
     refresh_token: String,
     #[serde(rename = "expiresIn")]
     expires_in: u64,
+    /// Already masked by the server (e.g. `a***@example.com`); safe to store and display as-is.
     email: String,
 }
 
 static HTTP: OnceLock<Client> = OnceLock::new();
 
-fn http() -> &'static Client {
+/// Shared reqwest client (accepts the ASP.NET dev cert in debug builds). `pub(crate)` so the sync
+/// data-plane calls to the Worker can reuse the same pooled client.
+pub(crate) fn http() -> &'static Client {
     HTTP.get_or_init(|| {
         let mut builder = Client::builder().timeout(Duration::from_secs(30));
         // Local dev uses https://localhost with the ASP.NET dev certificate.
@@ -119,14 +122,6 @@ fn random_b64url(byte_len: usize) -> String {
 
 fn code_challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
-}
-
-fn mask_email(email: &str) -> String {
-    match email.find('@') {
-        Some(at) if at >= 2 => format!("{}***{}", &email[..1], &email[at..]),
-        Some(at) => format!("***@{}", &email[at + 1..]),
-        None => "***@***".to_string(),
-    }
 }
 
 /// Start the loopback + PKCE desktop login. Opens the web login in the system browser and
@@ -220,7 +215,7 @@ async fn complete_login(
 
     let mut body: TokenResponse = res.json().await.map_err(|e| e.to_string())?;
 
-    let masked_email = mask_email(&body.email);
+    let masked_email = body.email.clone();
     let store = KeychainStore::new();
     store.save_account_session(&body.refresh_token, &masked_email)?;
 
@@ -323,7 +318,7 @@ async fn refresh_session(app: &AppHandle) -> Result<String, String> {
     }
 
     let mut body: TokenResponse = res.json().await.map_err(|e| e.to_string())?;
-    let masked_email = mask_email(&body.email);
+    let masked_email = body.email.clone();
     store.save_account_session(&body.refresh_token, &masked_email)?;
     app.state::<AuthState>()
         .set(body.access_token.clone(), masked_email, body.expires_in);
@@ -332,6 +327,70 @@ async fn refresh_session(app: &AppHandle) -> Result<String, String> {
     body.access_token.zeroize();
     body.refresh_token.zeroize();
     Ok(token)
+}
+
+/// Authenticated GET against the .NET API with the account access token, auto-refreshing once
+/// on a 401. Used by the sync control-plane calls (not the Worker data-plane calls, which carry
+/// their own capability token).
+pub(crate) async fn authed_get(app: &AppHandle, url: &str) -> Result<reqwest::Response, String> {
+    let mut token = ensure_access_token(app).await?;
+    let res = http()
+        .get(url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"));
+
+    if let Ok(r) = &res {
+        if r.status() == reqwest::StatusCode::UNAUTHORIZED {
+            token.zeroize();
+            token = refresh_session(app).await?;
+            let retry = http()
+                .get(url)
+                .bearer_auth(&token)
+                .send()
+                .await
+                .map_err(|e| format!("Network error: {e}"));
+            token.zeroize();
+            return retry;
+        }
+    }
+    token.zeroize();
+    res
+}
+
+/// Authenticated POST (JSON body) with the same auto-refresh-once behaviour as `authed_get`.
+pub(crate) async fn authed_post_json<T: Serialize + ?Sized>(
+    app: &AppHandle,
+    url: &str,
+    body: &T,
+) -> Result<reqwest::Response, String> {
+    let mut token = ensure_access_token(app).await?;
+    let res = http()
+        .post(url)
+        .bearer_auth(&token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"));
+
+    if let Ok(r) = &res {
+        if r.status() == reqwest::StatusCode::UNAUTHORIZED {
+            token.zeroize();
+            token = refresh_session(app).await?;
+            let retry = http()
+                .post(url)
+                .bearer_auth(&token)
+                .json(body)
+                .send()
+                .await
+                .map_err(|e| format!("Network error: {e}"));
+            token.zeroize();
+            return retry;
+        }
+    }
+    token.zeroize();
+    res
 }
 
 async fn get_me_ok(access_token: &str) -> Result<bool, String> {
