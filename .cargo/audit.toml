@@ -2,6 +2,10 @@
 # pulled in by the Tauri 2 framework or its deep dependency tree.
 #
 # Re-evaluate on every Tauri major/minor bump.
+#
+# Lives at the repo root: CI's audit-check runs `cargo audit --file
+# src-tauri/Cargo.lock` from here, and cargo-audit only reads
+# .cargo/audit.toml from the current directory. Run it the same way locally.
 
 [advisories]
 ignore = [
