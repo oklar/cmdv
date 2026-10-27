@@ -30,6 +30,17 @@ ignore = [
     "RUSTSEC-2024-0436", # paste — unmaintained (transitive via rav1e image codec)
 
     #
+    # ── zip 4.x via tauri-plugin-updater (Windows only) ──────────────────
+    # Fix needs zip >= 9; latest tauri-plugin-updater 2.x still pins zip 4.
+    # Only used to unpack .zip update bundles, after the minisign signature
+    # check. We ship raw NSIS installers (createUpdaterArtifacts: true), so
+    # this path is never hit. Drop these when the updater moves to zip >= 9.
+    #
+    "RUSTSEC-2026-0367", # zip — SUID/SGID bits kept on extract (Unix only)
+    "RUSTSEC-2026-0368", # zip — extracted symlinks can escape destination dir
+    "RUSTSEC-2026-0369", # zip — Unix permissions applied through symlinks (Unix only)
+
+    #
     # ── unic-* crates (transitive, unmaintained) ─────────────────────────
     # May appear on Linux CI builds via platform-specific dep paths.
     #

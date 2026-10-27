@@ -139,6 +139,7 @@ pub fn begin_desktop_login(app: AppHandle) -> Result<(), String> {
     let config = OauthConfig {
         ports: None,
         response: Some("cmdv login complete. You can close this window and return to the app.".into()),
+        redirect_uri: None,
     };
 
     let port = start_with_config(config, move |callback_url| {
