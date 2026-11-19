@@ -55,7 +55,7 @@ export function Settings() {
   if (!settings) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-zinc-500 text-sm">Loading settings...</div>
+        <div className="text-sm text-muted-foreground">Loading settings...</div>
       </div>
     );
   }
@@ -71,25 +71,25 @@ export function Settings() {
     : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+    <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
       <AccountPanel />
 
       <CloudSyncSection />
 
       {stats && (
         <section>
-          <h2 className="text-sm font-medium text-zinc-300 mb-2">Storage</h2>
-          <div className="bg-zinc-900 rounded-md p-3 space-y-2">
-            <div className="flex justify-between text-xs text-zinc-400">
+          <h2 className="section-label">Storage</h2>
+          <div className="space-y-2 rounded-lg border border-border bg-background/50 p-3">
+            <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
               <span>{stats.total_entries} entries</span>
               <span>
                 {formatBytes(stats.total_size_bytes)} /{" "}
                 {formatBytes(stats.max_size_bytes)}
               </span>
             </div>
-            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
               <div
-                className="h-full rounded-full transition-all bg-gradient-to-r from-lime-500 to-lime-400"
+                className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${Math.min(usagePercent, 100)}%` }}
               />
             </div>
@@ -98,15 +98,15 @@ export function Settings() {
       )}
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-2">Security</h2>
-        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+        <h2 className="section-label">Security</h2>
+        <div className="group-card">
           <SettingRow
             label="Device pairing"
             description="Transfer recovery phrase via QR code"
           >
             <button
               onClick={() => setShowQr(true)}
-              className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+              className="btn btn-sm btn-outline"
             >
               Show QR
             </button>
@@ -115,8 +115,8 @@ export function Settings() {
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-2">Startup</h2>
-        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+        <h2 className="section-label">Startup</h2>
+        <div className="group-card">
           <SettingRow
             label="Open at login (minimized to tray)"
             description="Register Cmdv to start when you sign in; opens in the tray with a notification"
@@ -138,13 +138,17 @@ export function Settings() {
                   console.error("Autostart failed:", err);
                 }
               }}
-              className={`relative w-10 h-5 rounded-full transition-colors ${
-                settings.login_autostart ? "bg-lime-500" : "bg-zinc-700"
+              role="switch"
+              aria-checked={settings.login_autostart}
+              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                settings.login_autostart ? "bg-primary" : "bg-input"
               }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  settings.login_autostart ? "translate-x-5" : ""
+                className={`absolute top-0.5 left-0.5 size-4 rounded-full transition-transform ${
+                  settings.login_autostart
+                    ? "translate-x-4 bg-primary-foreground"
+                    : "bg-muted-foreground"
                 }`}
               />
             </button>
@@ -153,8 +157,8 @@ export function Settings() {
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-zinc-300 mb-2">Data</h2>
-        <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+        <h2 className="section-label">Data</h2>
+        <div className="group-card">
           <SettingRow label="Export" description="Save encrypted backup">
             <button
               onClick={async () => {
@@ -173,7 +177,7 @@ export function Settings() {
                   }
                 }
               }}
-              className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+              className="btn btn-sm btn-outline"
             >
               Export
             </button>
@@ -199,7 +203,7 @@ export function Settings() {
                   }
                 }
               }}
-              className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+              className="btn btn-sm btn-outline"
             >
               Import
             </button>
@@ -283,24 +287,20 @@ function CloudSyncSection() {
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-2">Cloud Sync</h2>
-      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+      <h2 className="section-label">Cloud Sync</h2>
+      <div className="group-card">
         <SettingRow label="Automatic backup" description={description}>
           <button
             onClick={handleSyncNow}
             disabled={!loggedIn || syncing}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-              !loggedIn || syncing
-                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
-            }`}
+            className="btn btn-sm btn-outline"
           >
             {syncing ? "Syncing…" : "Sync now"}
           </button>
         </SettingRow>
 
         {lastError && (
-          <div className="px-3 py-2 text-xs text-red-400">{lastError}</div>
+          <div className="px-3 py-2 text-xs text-destructive">{lastError}</div>
         )}
       </div>
     </section>
@@ -329,19 +329,23 @@ const SHORTCUTS = [
 function KeyboardShortcuts() {
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-2">
+      <h2 className="section-label">
         Keyboard Shortcuts
       </h2>
-      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+      <div className="group-card">
         {SHORTCUTS.map(({ keys, description }) => (
           <div
             key={keys}
-            className="flex items-center justify-between px-3 py-2"
+            className="flex items-center justify-between gap-3 px-3 py-2"
           >
-            <span className="text-xs text-zinc-400">{description}</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[11px] font-mono">
-              {keys}
-            </kbd>
+            <span className="text-xs text-muted-foreground">{description}</span>
+            <span className="flex shrink-0 items-center gap-1">
+              {keys.split(" + ").map((key) => (
+                <kbd key={key} className="kbd">
+                  {key}
+                </kbd>
+              ))}
+            </span>
           </div>
         ))}
       </div>
@@ -388,8 +392,8 @@ function DevSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-2">Developer</h2>
-      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+      <h2 className="section-label">Developer</h2>
+      <div className="group-card">
         <SettingRow
           label="Poll interval"
           description="How often to check clipboard"
@@ -402,7 +406,7 @@ function DevSection({
                 poll_interval_ms: Number(e.target.value),
               })
             }
-            className="bg-zinc-800 text-zinc-300 text-sm rounded-md px-2 py-1 border-0 focus:ring-1 focus:ring-zinc-600"
+            className="rounded-md border border-border bg-secondary px-2 py-1 text-xs text-foreground"
           >
             <option value={500}>0.5s</option>
             <option value={1000}>1s</option>
@@ -427,41 +431,39 @@ function DevSection({
             }
             className="w-24"
           />
-          <span className="text-xs text-zinc-500 ml-2 w-8">
+          <span className="ml-2 w-8 font-mono text-[11px] text-muted-foreground">
             {settings.webp_quality}%
           </span>
         </SettingRow>
-        <div className="px-3 py-2.5 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
           <div>
-            <div className="text-sm text-zinc-300">Clear all entries</div>
-            <div className="text-xs text-zinc-500">
+            <div className="text-sm text-foreground">Clear all entries</div>
+            <div className="text-xs text-muted-foreground">
               Delete all clipboard entries but keep vault
             </div>
           </div>
           <button
             onClick={handleClearEntries}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-              confirming === "clear"
-                ? "bg-red-600 hover:bg-red-500 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+            className={`btn btn-sm shrink-0 ${
+              confirming === "clear" ? "btn-danger" : "btn-outline"
             }`}
           >
             {confirming === "clear" ? "Confirm" : "Clear"}
           </button>
         </div>
-        <div className="px-3 py-2.5 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
           <div>
-            <div className="text-sm text-red-400">Reset vault</div>
-            <div className="text-xs text-zinc-500">
-              Wipe everything — DB, keys, keychain. App will restart.
+            <div className="text-sm text-destructive">Reset vault</div>
+            <div className="text-xs text-muted-foreground">
+              Wipe everything: DB, keys, keychain. App will restart.
             </div>
           </div>
           <button
             onClick={handleReset}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+            className={`btn btn-sm shrink-0 ${
               confirming === "reset"
-                ? "bg-red-600 hover:bg-red-500 text-white"
-                : "bg-zinc-800 hover:bg-zinc-700 text-red-400"
+                ? "btn-danger"
+                : "btn-outline text-destructive"
             }`}
           >
             {confirming === "reset" ? "Confirm reset" : "Reset"}
@@ -511,20 +513,20 @@ function AboutSection() {
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-2">About</h2>
-      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+      <h2 className="section-label">About</h2>
+      <div className="group-card">
         <SettingRow label="Version" description={version || "..."}>
           <button
             onClick={checkForUpdate}
             disabled={busy}
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+            className={`btn btn-sm ${
               busy
-                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                ? "btn-outline"
                 : updateStatus === "no-update"
-                  ? "bg-lime-900/40 text-lime-400"
+                  ? "border border-primary/30 bg-primary/10 text-primary"
                   : updateStatus === "error"
-                    ? "bg-red-900/40 text-red-400"
-                    : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                    ? "border border-destructive/30 bg-destructive/10 text-destructive"
+                    : "btn-outline"
             }`}
           >
             {label}
@@ -545,12 +547,12 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2.5">
-      <div>
-        <div className="text-sm text-zinc-300">{label}</div>
-        <div className="text-xs text-zinc-500">{description}</div>
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="text-sm text-foreground">{label}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
       </div>
-      <div className="flex items-center">{children}</div>
+      <div className="flex shrink-0 items-center">{children}</div>
     </div>
   );
 }

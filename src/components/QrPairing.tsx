@@ -16,42 +16,42 @@ export function QrPairing({ onClose }: QrPairingProps) {
   }, []);
 
   return (
-    <div className="space-y-6 max-w-md mx-auto p-6 text-center">
-      <div>
-        <h2 className="text-xl font-bold text-zinc-100">Pair Device</h2>
-        <p className="text-zinc-400 text-sm mt-2">
-          Scan this QR code from your other device running CMDV to transfer your
-          recovery phrase securely.
-        </p>
-      </div>
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-md space-y-5 p-5 text-center">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            Pair Device
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Scan this QR code from your other device running CMDV to transfer
+            your recovery phrase securely.
+          </p>
+        </div>
 
-      {error ? (
-        <div className="bg-red-900/30 rounded-2xl p-6">
-          <p className="text-red-400 text-sm">{error}</p>
-        </div>
-      ) : qrDataUrl ? (
-        <div className="bg-white rounded-2xl p-6 inline-block mx-auto">
-          <img src={qrDataUrl} alt="QR Code" className="w-64 h-64" />
-        </div>
-      ) : (
-        <div className="bg-zinc-900 rounded-2xl p-12 flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-zinc-600 border-t-zinc-300 rounded-full animate-spin" />
-        </div>
-      )}
+        {error ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        ) : qrDataUrl ? (
+          <div className="mx-auto inline-block rounded-xl bg-white p-4">
+            <img src={qrDataUrl} alt="QR Code" className="size-56" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center rounded-xl border border-border bg-background/50 p-12">
+            <div className="spinner" />
+          </div>
+        )}
 
-      <div className="bg-amber-900/30 border border-amber-700/50 rounded-lg p-4">
-        <p className="text-xs text-amber-300">
+        <p className="callout-warning text-left">
           This QR code contains your 24-word recovery phrase. Only scan it on
-          devices you trust. The mnemonic gives full access to your encrypted data.
+          devices you trust. The mnemonic gives full access to your encrypted
+          data.
         </p>
-      </div>
 
-      <button
-        onClick={onClose}
-        className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-      >
-        Done
-      </button>
+        <button onClick={onClose} className="btn btn-outline w-full">
+          Done
+        </button>
+      </div>
     </div>
   );
 }
