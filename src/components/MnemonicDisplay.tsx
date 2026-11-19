@@ -41,70 +41,69 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   };
 
   return (
-    <div className="space-y-4 max-w-md mx-auto p-6">
+    <div className="mx-auto w-full max-w-md space-y-3">
       <div>
-        <h2 className="text-xl font-bold text-zinc-100">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">
           Your Recovery Phrase
         </h2>
-        <p className="text-zinc-400 text-sm mt-2">
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Write these 24 words down and store them somewhere safe. You will need
           them to set up CMDV on a new device. This is the only time they will
           be shown.
         </p>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3">
-        <div className="grid grid-cols-3 gap-2">
-          {words.map((word, i) => (
-            <div key={i} className="flex items-center gap-2 py-1">
-              <span className="text-xs text-zinc-600 w-5 text-right">
-                {i + 1}.
-              </span>
-              <span className="text-sm font-mono text-zinc-200">{word}</span>
-            </div>
-          ))}
-        </div>
+      <div className="grid grid-cols-3 gap-1 font-mono">
+        {words.map((word, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-[3px]"
+          >
+            <span className="w-4 shrink-0 text-right text-[10px] text-muted-foreground/60">
+              {i + 1}
+            </span>
+            <span className="truncate text-xs text-foreground">{word}</span>
+          </div>
+        ))}
       </div>
 
       <div className="flex gap-2">
         <button
           onClick={() => handleSave("pdf")}
           disabled={saving}
-          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+          className="btn btn-outline h-8 flex-1 px-2 text-xs"
         >
           Save as PDF
         </button>
         <button
           onClick={() => handleSave("txt")}
           disabled={saving}
-          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors disabled:opacity-50"
+          className="btn btn-outline h-8 flex-1 px-2 text-xs"
         >
           Save as Text
         </button>
         <button
           onClick={handleCopy}
-          className="flex-1 py-2 text-sm font-medium rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+          className="btn btn-outline h-8 flex-1 px-2 text-xs"
         >
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-3">
-        <p className="text-amber-400 text-xs">
-          If you lose these words and all your devices, your data cannot
-          be recovered. CMDV support cannot help — this is by design for your
-          security.
-        </p>
-      </div>
+      <p className="callout-warning">
+        If you lose these words and all your devices, your data cannot be
+        recovered. CMDV support cannot help. This is by design, for your
+        security.
+      </p>
 
-      <label className="flex items-start gap-3 cursor-pointer">
+      <label className="flex cursor-pointer items-center gap-2.5">
         <input
           type="checkbox"
           checked={confirmed}
           onChange={(e) => setConfirmed(e.target.checked)}
-          className="mt-0.5 rounded border-zinc-600 bg-zinc-800 text-lime-500 focus:ring-lime-500"
+          className="size-4 shrink-0"
         />
-        <span className="text-sm text-zinc-400">
+        <span className="text-xs leading-4 text-muted-foreground">
           I have written down my recovery phrase and stored it safely.
         </span>
       </label>
@@ -112,7 +111,7 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
       <button
         onClick={onConfirm}
         disabled={!confirmed}
-        className="w-full py-2.5 bg-lime-600 hover:bg-lime-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-medium rounded-md transition-colors"
+        className="btn btn-primary w-full"
       >
         Continue
       </button>

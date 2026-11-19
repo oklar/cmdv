@@ -1,27 +1,182 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+/* Same palette as cmdv.to: ink-black surfaces with a faint olive cast and the
+   lime of the app icon as the only accent. */
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  --background: 90 10% 4%;
+  --foreground: 80 14% 93%;
+  --card: 90 7% 6.5%;
+  --card-foreground: 80 14% 93%;
+  --primary: 77 68% 57%;
+  --primary-foreground: 90 30% 6%;
+  --secondary: 90 6% 11.5%;
+  --secondary-foreground: 80 14% 93%;
+  --muted: 90 6% 11.5%;
+  --muted-foreground: 85 5% 62%;
+  --destructive: 2 78% 64%;
+  --destructive-foreground: 0 0% 100%;
+  --warning: 40 90% 62%;
+  --border: 90 6% 14.5%;
+  --input: 90 6% 17%;
+  --ring: 77 68% 57%;
+  --radius: 0.625rem;
+
+  color-scheme: dark;
+  accent-color: hsl(var(--primary));
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  accent-color: #84cc16;
 }
 
-* {
-  scrollbar-width: none;
-}
-*::-webkit-scrollbar {
-  display: none;
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+  html,
+  body {
+    @apply bg-card;
+  }
+  body {
+    @apply m-0 min-h-screen text-foreground antialiased;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.7);
+    outline-offset: 2px;
+  }
 }
 
-html, body {
-  background-color: #09090b;
+@layer components {
+  /* Mono label above a group of settings. */
+  .section-label {
+    @apply mb-2 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  /* Inset list of rows, used for every settings group. */
+  .group-card {
+    @apply divide-y divide-border rounded-lg border border-border bg-background/50;
+  }
+
+  /* Keyboard keycap. */
+  .kbd {
+    @apply inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border bg-secondary px-1.5 font-mono text-[11px] whitespace-nowrap text-foreground;
+    box-shadow:
+      inset 0 1px 0 hsl(80 10% 100% / 0.08),
+      0 1.5px 0 hsl(90 8% 2%);
+  }
+
+  .btn {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium whitespace-nowrap;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.1s ease;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .btn-sm {
+    @apply h-7 rounded-md px-2.5 text-xs;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.35),
+      0 0 0 1px hsl(var(--primary) / 0.5);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: hsl(77 74% 63%);
+  }
+  .btn-outline {
+    @apply border border-border bg-secondary/60 text-foreground;
+  }
+  .btn-outline:hover:not(:disabled) {
+    @apply bg-secondary;
+    border-color: hsl(80 6% 24%);
+  }
+  .btn-danger {
+    @apply bg-destructive text-destructive-foreground;
+  }
+
+  /* Square icon-only button for the title bar and entry actions. */
+  .icon-btn {
+    @apply inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors;
+  }
+  .icon-btn:hover {
+    @apply bg-secondary text-foreground;
+  }
+
+  /* Multi-line text field for recovery phrases. */
+  .field {
+    @apply w-full rounded-lg border border-input bg-background/70 px-3 py-2.5 text-sm text-foreground;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .field::placeholder {
+    @apply text-muted-foreground/70;
+  }
+  .field:focus {
+    outline: none;
+    border-color: hsl(var(--primary) / 0.7);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.16);
+  }
+
+  .spinner {
+    @apply size-6 animate-spin rounded-full border-2 border-border border-t-primary;
+  }
+
+  /* Amber callout for the "you cannot recover this" warnings. */
+  .callout-warning {
+    @apply rounded-lg border p-3 text-xs leading-relaxed text-warning;
+    border-color: hsl(var(--warning) / 0.25);
+    background: hsl(var(--warning) / 0.08);
+  }
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

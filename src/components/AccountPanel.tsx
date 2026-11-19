@@ -82,17 +82,17 @@ export function AccountPanel() {
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-zinc-300 mb-2">Account</h2>
-      <div className="bg-zinc-900 rounded-md divide-y divide-zinc-800">
+      <h2 className="section-label">Account</h2>
+      <div className="group-card">
         {email ? (
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">
-              <div className="truncate text-sm text-zinc-300">{email}</div>
-              <div className="text-xs text-zinc-500">Signed in to your cmdv account</div>
+              <div className="truncate text-sm text-foreground">{email}</div>
+              <div className="text-xs text-muted-foreground">Signed in to your cmdv account</div>
             </div>
             <button
               onClick={handleLogout}
-              className="shrink-0 whitespace-nowrap text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-md transition-colors"
+              className="btn btn-sm btn-outline shrink-0"
             >
               Log out
             </button>
@@ -100,26 +100,22 @@ export function AccountPanel() {
         ) : (
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">
-              <div className="text-sm text-zinc-300">Not signed in</div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-sm text-foreground">Not signed in</div>
+              <div className="text-xs text-muted-foreground">
                 Log in through your browser to connect this device
               </div>
             </div>
             <button
               onClick={handleLogin}
               disabled={loading}
-              className={`shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md transition-colors ${
-                loading
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                  : "bg-lime-600 hover:bg-lime-500 text-white"
-              }`}
+              className="btn btn-sm btn-primary shrink-0"
             >
               {loading ? "Waiting for browser…" : "Log in"}
             </button>
           </div>
         )}
         {error && (
-          <div className="px-3 py-2 text-xs text-red-400">{error}</div>
+          <div className="px-3 py-2 text-xs text-destructive">{error}</div>
         )}
       </div>
     </section>

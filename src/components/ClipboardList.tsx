@@ -110,6 +110,9 @@ export function ClipboardList({
         } else if (key === "t") {
           e.preventDefault();
           onFilterTypeChange("text");
+        } else if (key === "l") {
+          e.preventDefault();
+          onFilterTypeChange("link");
         } else if (key === "i") {
           e.preventDefault();
           onFilterTypeChange("image");
@@ -185,36 +188,35 @@ export function ClipboardList({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-zinc-500 text-sm">Loading...</div>
+      <div className="flex flex-1 items-center justify-center">
+        <div className="spinner" />
       </div>
     );
   }
 
   if (entries.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-8">
-        <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center mb-4">
+      <div className="flex flex-1 flex-col items-center justify-center px-8">
+        <div className="mb-4 flex size-14 items-center justify-center rounded-xl border border-border bg-background/60 text-muted-foreground">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="28"
-            height="28"
+            width="24"
+            height="24"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
-            className="text-zinc-600"
           >
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
           </svg>
         </div>
-        <p className="text-zinc-400 text-sm text-center">
+        <p className="text-center text-sm text-foreground/90">
           {searchQuery
             ? "No results found"
             : "Your clipboard history will appear here"}
         </p>
-        <p className="text-zinc-600 text-xs mt-1 text-center">
+        <p className="mt-1 text-center text-xs text-muted-foreground">
           Copy something to get started
         </p>
       </div>
@@ -228,7 +230,7 @@ export function ClipboardList({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pt-1.5 pb-2">
       {entries.map((entry, index) => (
         <EntryCard
           key={entry.id}

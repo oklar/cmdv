@@ -57,24 +57,26 @@ export function PasteReveal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <h2 className="text-sm font-semibold text-zinc-100">Secure paste</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border py-2 pr-2 pl-4">
+          <h2 className="text-sm font-semibold text-foreground">Secure paste</h2>
           <button
             type="button"
             onClick={dismiss}
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+            className="icon-btn"
             aria-label="Close"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
+              width="15"
+              height="15"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -82,17 +84,17 @@ export function PasteReveal() {
           </button>
         </div>
 
-        <div className="px-4 py-4 space-y-3">
+        <div className="space-y-3 p-4">
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+              <div className="spinner" />
             </div>
           )}
 
           {error && !loading && (
             <>
-              <p className="text-sm text-zinc-400">{error}</p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-sm text-foreground/90">{error}</p>
+              <p className="text-xs text-muted-foreground">
                 The paste may have been opened in the browser already.
               </p>
             </>
@@ -100,17 +102,17 @@ export function PasteReveal() {
 
           {plaintext && !loading && (
             <>
-              <pre className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-200">
+              <pre className="max-h-[40vh] overflow-auto rounded-lg border border-border bg-background/70 p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-foreground">
                 {plaintext}
               </pre>
               <button
                 type="button"
                 onClick={() => void copyPlaintext()}
-                className="w-full rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-white"
+                className="btn btn-primary w-full"
               >
                 {copied ? "Copied" : "Copy to clipboard"}
               </button>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 Deleted from the server. This view is one-time only.
               </p>
             </>
