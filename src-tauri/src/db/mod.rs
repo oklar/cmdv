@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Mutex;
 
-pub use entries::{ClipboardEntry, EntryType, NewEntry};
+pub use entries::{ClipboardEntry, EntryFilter, EntryType, NewEntry};
 
 pub struct Database {
     conn: Mutex<Option<Connection>>,
@@ -78,7 +78,7 @@ impl Database {
         &self,
         limit: usize,
         offset: usize,
-        entry_type: Option<EntryType>,
+        filter: Option<EntryFilter>,
         favorites_only: bool,
     ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
         let guard = self.conn()?;
@@ -86,7 +86,7 @@ impl Database {
             guard.as_ref().unwrap(),
             limit,
             offset,
-            entry_type,
+            filter,
             favorites_only,
         )
     }

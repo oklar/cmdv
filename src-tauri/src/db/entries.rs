@@ -25,6 +25,42 @@ impl EntryType {
     }
 }
 
+/// What the entry list is narrowed to. `Link` is not a stored type: links are
+/// text entries whose whole content is a single http(s) URL.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EntryFilter {
+    Text,
+    Image,
+    Link,
+}
+
+impl EntryFilter {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "image" => EntryFilter::Image,
+            "link" => EntryFilter::Link,
+            _ => EntryFilter::Text,
+        }
+    }
+
+    fn sql(&self) -> &'static str {
+        match self {
+            EntryFilter::Text => " AND content_type = 'text'",
+            EntryFilter::Image => " AND content_type = 'image'",
+            EntryFilter::Link => LINK_SQL,
+        }
+    }
+}
+
+/// A text entry that, once surrounding whitespace (space, tab, LF, CR) is
+/// trimmed, starts with http:// or https:// and has no whitespace inside it.
+/// LIKE ignores ASCII case, so HTTPS:// matches too.
+const LINK_SQL: &str = " AND content_type = 'text'
+     AND (TRIM(CAST(content AS TEXT), char(32, 9, 10, 13)) LIKE 'http://_%'
+       OR TRIM(CAST(content AS TEXT), char(32, 9, 10, 13)) LIKE 'https://_%')
+     AND TRIM(CAST(content AS TEXT), char(32, 9, 10, 13))
+         NOT GLOB '*[' || char(32, 9, 10, 13) || ']*'";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardEntry {
     pub id: String,
@@ -74,7 +110,7 @@ pub fn get_entries(
     conn: &Connection,
     limit: usize,
     offset: usize,
-    entry_type: Option<EntryType>,
+    filter: Option<EntryFilter>,
     favorites_only: bool,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut sql = String::from(
@@ -82,8 +118,8 @@ pub fn get_entries(
          FROM entries WHERE 1=1",
     );
 
-    if let Some(ref t) = entry_type {
-        sql.push_str(&format!(" AND content_type = '{}'", t.as_str()));
+    if let Some(filter) = filter {
+        sql.push_str(filter.sql());
     }
     if favorites_only {
         sql.push_str(" AND is_favorite = 1");
@@ -268,6 +304,111 @@ mod tests {
         let page2 = get_entries(&conn, 3, 3, None, false).unwrap();
         assert_eq!(page1.len(), 3);
         assert_eq!(page2.len(), 2);
+    }
+
+    fn insert_text(conn: &Connection, content: &str, hash: u8) -> String {
+        insert_entry(
+            conn,
+            &NewEntry {
+                content: content.as_bytes().to_vec(),
+                content_hash: vec![hash],
+                ..sample_entry()
+            },
+        )
+        .unwrap()
+    }
+
+    fn contents(entries: Vec<ClipboardEntry>) -> Vec<String> {
+        let mut out: Vec<String> = entries
+            .into_iter()
+            .map(|e| String::from_utf8(e.content).unwrap())
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn type_filters_match_stored_type() {
+        let conn = setup_db();
+        insert_text(&conn, "plain text", 1);
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: vec![0xff, 0xd8],
+                content_type: EntryType::Image,
+                content_hash: vec![2],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
+
+        let text = get_entries(&conn, 50, 0, Some(EntryFilter::Text), false).unwrap();
+        assert_eq!(text.len(), 1);
+        assert_eq!(text[0].content_type, EntryType::Text);
+
+        let images = get_entries(&conn, 50, 0, Some(EntryFilter::Image), false).unwrap();
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].content_type, EntryType::Image);
+    }
+
+    #[test]
+    fn link_filter_matches_only_whole_url_entries() {
+        let conn = setup_db();
+        // Links.
+        insert_text(&conn, "https://github.com/oklar/cmdv", 1);
+        insert_text(&conn, "http://localhost:5173/?q=a%20b#top", 2);
+        insert_text(&conn, "  https://example.com/path\r\n", 3);
+        insert_text(&conn, "HTTPS://EXAMPLE.COM", 4);
+        // Not links.
+        insert_text(&conn, "see https://example.com for details", 5);
+        insert_text(&conn, "https://example.com and more", 6);
+        insert_text(&conn, "https://a.example\nhttps://b.example", 7);
+        insert_text(&conn, "https://", 8);
+        insert_text(&conn, "ftp://example.com/file", 9);
+        insert_text(&conn, "httpsfoo", 10);
+        insert_text(&conn, "plain text", 11);
+        insert_entry(
+            &conn,
+            &NewEntry {
+                content: b"https://example.com/image-bytes".to_vec(),
+                content_type: EntryType::Image,
+                content_hash: vec![12],
+                ..sample_entry()
+            },
+        )
+        .unwrap();
+
+        let links = get_entries(&conn, 50, 0, Some(EntryFilter::Link), false).unwrap();
+        assert_eq!(
+            contents(links),
+            vec![
+                "  https://example.com/path\r\n",
+                "HTTPS://EXAMPLE.COM",
+                "http://localhost:5173/?q=a%20b#top",
+                "https://github.com/oklar/cmdv",
+            ]
+        );
+    }
+
+    #[test]
+    fn link_filter_combines_with_favorites() {
+        let conn = setup_db();
+        let fav = insert_text(&conn, "https://example.com/fav", 1);
+        insert_text(&conn, "https://example.com/other", 2);
+        let fav_text = insert_text(&conn, "favorite note", 3);
+        toggle_favorite(&conn, &fav).unwrap();
+        toggle_favorite(&conn, &fav_text).unwrap();
+
+        let links = get_entries(&conn, 50, 0, Some(EntryFilter::Link), true).unwrap();
+        assert_eq!(contents(links), vec!["https://example.com/fav"]);
+    }
+
+    #[test]
+    fn unknown_filter_name_falls_back_to_text() {
+        assert_eq!(EntryFilter::from_str("image"), EntryFilter::Image);
+        assert_eq!(EntryFilter::from_str("link"), EntryFilter::Link);
+        assert_eq!(EntryFilter::from_str("text"), EntryFilter::Text);
+        assert_eq!(EntryFilter::from_str("whatever"), EntryFilter::Text);
     }
 
     #[test]

@@ -110,6 +110,9 @@ export function ClipboardList({
         } else if (key === "t") {
           e.preventDefault();
           onFilterTypeChange("text");
+        } else if (key === "l") {
+          e.preventDefault();
+          onFilterTypeChange("link");
         } else if (key === "i") {
           e.preventDefault();
           onFilterTypeChange("image");

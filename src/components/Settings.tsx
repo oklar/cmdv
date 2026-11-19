@@ -321,6 +321,7 @@ const SHORTCUTS = [
   { keys: "Escape", description: "Hide to tray" },
   { keys: "Alt + A", description: "Filter: All" },
   { keys: "Alt + T", description: "Filter: Text" },
+  { keys: "Alt + L", description: "Filter: Links" },
   { keys: "Alt + I", description: "Filter: Image" },
   { keys: "Alt + F", description: "Toggle favorites filter" },
   { keys: "Alt + S", description: "Star / unstar selected entry" },

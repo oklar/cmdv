@@ -1,5 +1,5 @@
 use crate::crypto::keys::VaultState;
-use crate::db::{Database, EntryType};
+use crate::db::{Database, EntryFilter, EntryType};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::State;
@@ -50,12 +50,12 @@ pub fn get_entries(
         .as_ref()
         .ok_or("Vault is locked")?;
 
-    let entry_type = content_type.map(|t| EntryType::from_str(&t));
+    let filter = content_type.map(|t| EntryFilter::from_str(&t));
     let entries = db
         .get_entries(
             limit.unwrap_or(50),
             offset.unwrap_or(0),
-            entry_type,
+            filter,
             favorites_only.unwrap_or(false),
         )
         .map_err(|e| e.to_string())?;

@@ -29,6 +29,7 @@ export function SearchBar({
   const filters = [
     { type: "all", label: "All" },
     { type: "text", label: "Text" },
+    { type: "link", label: "Links" },
     { type: "image", label: "Images" },
   ] as const;
 
