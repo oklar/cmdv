@@ -18,7 +18,6 @@ type View =
   | { kind: "shown"; qr: string }
   | { kind: "error"; message: string };
 
-/** How long the QR code stays on screen. */
 const SHOW_SECONDS = 60;
 
 export function QrPairing({ onClose }: QrPairingProps) {
@@ -47,7 +46,6 @@ export function QrPairing({ onClose }: QrPairingProps) {
   const hide = useCallback(() => setView({ kind: "intro" }), []);
   const shown = view.kind === "shown";
 
-  // Hide the code after a minute, and as soon as the window is left.
   useEffect(() => {
     if (!shown) return;
     const deadline = Date.now() + SHOW_SECONDS * 1000;

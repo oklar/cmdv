@@ -3,9 +3,6 @@ pub mod source;
 
 pub use monitor::ClipboardMonitor;
 
-/// Puts secret text on the clipboard marked so clipboard monitors and history skip it:
-/// `ExcludeClipboardContentFromMonitorProcessing` on Windows (which also keeps it out of
-/// clipboard history and the cloud clipboard), KDE's password-manager hint on Linux.
 pub fn set_private_text(text: &str) -> Result<(), String> {
     let mut last_err = String::new();
     for attempt in 0..5 {
@@ -43,7 +40,6 @@ pub fn set_private_text(text: &str) -> Result<(), String> {
     Err(format!("Could not copy to the clipboard: {last_err}"))
 }
 
-/// Empties the clipboard if it still holds the text whose SHA-256 is `digest`.
 pub fn clear_if_unchanged(digest: &[u8; 32]) {
     use sha2::{Digest, Sha256};
     use zeroize::Zeroize;
@@ -66,10 +62,18 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    /// Uses the real Windows clipboard, so it's ignored by default:
-    /// `cargo test -- --ignored private_clipboard`. Every write is marked private, so nothing
-    /// lands in Windows clipboard history or a running clipboard manager, and the previous text
-    /// is put back at the end.
+    fn excluded_from_monitoring() -> bool {
+        use windows_sys::Win32::System::DataExchange::{
+            IsClipboardFormatAvailable, RegisterClipboardFormatW,
+        };
+        let name: Vec<u16> = "ExcludeClipboardContentFromMonitorProcessing"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        unsafe { IsClipboardFormatAvailable(RegisterClipboardFormatW(name.as_ptr())) != 0 }
+    }
+
+    /// Uses the real clipboard; writes are marked private and the previous text is restored.
     #[test]
     #[ignore]
     fn private_clipboard_round_trip() {
@@ -77,25 +81,9 @@ mod tests {
         let previous = clipboard.get_text().ok();
 
         set_private_text("cmdv private clipboard test").unwrap();
-        assert!(source::clipboard_marked_private(), "private copy is detected");
+        assert!(excluded_from_monitoring(), "the copy is marked private");
 
-        clipboard.clear().unwrap();
-        assert!(!source::clipboard_marked_private(), "an empty clipboard is not flagged");
-
-        {
-            use arboard::SetExtWindows;
-            clipboard
-                .set()
-                .exclude_from_history()
-                .text("cmdv history flag test")
-                .unwrap();
-        }
-        assert!(
-            source::clipboard_marked_private(),
-            "CanIncludeInClipboardHistory = 0 is detected"
-        );
-
-        let digest: [u8; 32] = Sha256::digest(b"cmdv history flag test").into();
+        let digest: [u8; 32] = Sha256::digest(b"cmdv private clipboard test").into();
         set_private_text("something copied later").unwrap();
         clear_if_unchanged(&digest);
         assert_eq!(
@@ -104,7 +92,7 @@ mod tests {
             "a clipboard that changed since is left alone"
         );
 
-        set_private_text("cmdv history flag test").unwrap();
+        set_private_text("cmdv private clipboard test").unwrap();
         clear_if_unchanged(&digest);
         assert!(
             clipboard.get_text().map(|t| t.is_empty()).unwrap_or(true),

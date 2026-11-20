@@ -1,18 +1,11 @@
-//! Asks the operating system to confirm that the person at the computer is the signed-in user
-//! (Windows Hello: PIN, fingerprint or face) before the app reveals a secret.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsAuth {
-    /// The user confirmed their identity.
     Verified,
-    /// The user dismissed the prompt or failed it.
     Cancelled,
-    /// This device has no OS prompt the app can use (no Windows Hello set up, or not Windows).
     Unavailable,
 }
 
-/// Shows the OS identity prompt over `window` and blocks until the user answers.
-/// Call it off the main thread.
+/// Blocks until the user answers; call it off the main thread.
 #[cfg(windows)]
 pub fn verify_user(window: isize, message: &str) -> Result<OsAuth, String> {
     use windows::core::{factory, HSTRING};
@@ -53,7 +46,7 @@ pub fn verify_user(window: isize, message: &str) -> Result<OsAuth, String> {
     })
 }
 
-/// Linux has no per-user prompt an app can rely on without installing a polkit policy.
+/// Linux has no per-user prompt an app can use without installing a polkit policy.
 #[cfg(not(windows))]
 pub fn verify_user(_window: isize, _message: &str) -> Result<OsAuth, String> {
     Ok(OsAuth::Unavailable)
@@ -61,8 +54,7 @@ pub fn verify_user(_window: isize, _message: &str) -> Result<OsAuth, String> {
 
 #[cfg(all(test, windows))]
 mod tests {
-    /// Reaches Windows Hello without showing a prompt: proves the WinRT calls link and run.
-    /// Ignored by default because it depends on the machine's Windows Hello setup.
+    /// Depends on the machine's Windows Hello setup.
     #[test]
     #[ignore]
     fn windows_hello_availability_can_be_read() {

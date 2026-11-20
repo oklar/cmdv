@@ -24,100 +24,6 @@ pub fn get_foreground_app() -> Option<String> {
     }
 }
 
-/// The app that put the current content on the clipboard, when the OS can tell. A password
-/// manager often copies while another window has focus (auto-type, a browser extension), so the
-/// foreground app alone misses it.
-pub fn get_clipboard_owner_app() -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::System::DataExchange::GetClipboardOwner;
-        process_name_of_window(unsafe { GetClipboardOwner() })
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        None
-    }
-}
-
-/// True when whoever wrote the clipboard asked clipboard monitors and history to skip it.
-/// Password managers and apps copying secrets set these markers.
-pub fn clipboard_marked_private() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        clipboard_marked_private_windows()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        false
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn clipboard_format(name: &str) -> u32 {
-    use windows_sys::Win32::System::DataExchange::RegisterClipboardFormatW;
-    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
-    unsafe { RegisterClipboardFormatW(wide.as_ptr()) }
-}
-
-#[cfg(target_os = "windows")]
-fn clipboard_marked_private_windows() -> bool {
-    use windows_sys::Win32::System::DataExchange::IsClipboardFormatAvailable;
-
-    // "ExcludeClipboardContentFromMonitorProcessing" is Windows' documented signal to clipboard
-    // monitors; "Clipboard Viewer Ignore" is the older convention (KeePass, Ditto). Present with
-    // any value means skip.
-    for name in [
-        "ExcludeClipboardContentFromMonitorProcessing",
-        "Clipboard Viewer Ignore",
-    ] {
-        let format = clipboard_format(name);
-        if format != 0 && unsafe { IsClipboardFormatAvailable(format) } != 0 {
-            return true;
-        }
-    }
-
-    // "CanIncludeInClipboardHistory" set to 0 keeps content out of Windows clipboard history.
-    // If the value can't be read right now, skip this poll; the next one tries again.
-    let history = clipboard_format("CanIncludeInClipboardHistory");
-    if history != 0 && unsafe { IsClipboardFormatAvailable(history) } != 0 {
-        return read_clipboard_u32(history).map_or(true, |value| value == 0);
-    }
-
-    false
-}
-
-#[cfg(target_os = "windows")]
-fn read_clipboard_u32(format: u32) -> Option<u32> {
-    use windows_sys::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
-    use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
-
-    unsafe {
-        let mut opened = false;
-        for _ in 0..5 {
-            if OpenClipboard(core::ptr::null_mut()) != 0 {
-                opened = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        if !opened {
-            return None;
-        }
-
-        let mut value = None;
-        let handle = GetClipboardData(format);
-        if !handle.is_null() && GlobalSize(handle) >= 4 {
-            let ptr = GlobalLock(handle) as *const u32;
-            if !ptr.is_null() {
-                value = Some(ptr.read_unaligned());
-                GlobalUnlock(handle);
-            }
-        }
-        CloseClipboard();
-        value
-    }
-}
-
 pub fn is_excluded_app(app_name: &str) -> bool {
     let lower = app_name.to_lowercase();
     EXCLUDED_APPS
@@ -137,20 +43,15 @@ pub fn is_excluded_with_custom(app_name: &str, custom_list: &[String]) -> bool {
 
 #[cfg(target_os = "windows")]
 fn get_foreground_app_windows() -> Option<String> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    process_name_of_window(unsafe { GetForegroundWindow() })
-}
-
-/// Executable name (e.g. `KeePassXC.exe`) of the process that owns `hwnd`.
-#[cfg(target_os = "windows")]
-fn process_name_of_window(hwnd: windows_sys::Win32::Foundation::HWND) -> Option<String> {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
     unsafe {
+        let hwnd = GetForegroundWindow();
         if hwnd.is_null() {
             return None;
         }

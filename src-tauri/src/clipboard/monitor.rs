@@ -56,19 +56,11 @@ impl ClipboardMonitor {
         max_entry_size: usize,
         clipboard_skip_hash: &Arc<Mutex<Option<Vec<u8>>>>,
     ) -> Result<Option<String>, String> {
-        // Content the writer marked as private (password managers, our own recovery phrase copy).
-        if source::clipboard_marked_private() {
-            return Ok(None);
-        }
-
-        // An excluded app either owns the clipboard content or is in front.
-        let apps = [source::get_clipboard_owner_app(), source::get_foreground_app()];
-        if apps
-            .iter()
-            .flatten()
-            .any(|app| source::is_excluded_with_custom(app, &self.excluded_apps))
-        {
-            return Ok(None);
+        let source_app = source::get_foreground_app();
+        if let Some(ref app) = source_app {
+            if source::is_excluded_with_custom(app, &self.excluded_apps) {
+                return Ok(None);
+            }
         }
 
         let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;

@@ -85,8 +85,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
 ] }
-# Windows Hello prompt before revealing the recovery phrase (os_auth.rs)
-windows = { version = "0.61", features = [
+windows ={ version = "0.61", features = [
     "Foundation",
     "Security_Credentials_UI",
     "Win32_Foundation",

@@ -19,8 +19,7 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
 
-/// True while an OS identity prompt (Windows Hello) is open over the window. The prompt takes
-/// focus, and the window must not auto-hide behind it.
+/// Set while Windows Hello is open: it takes focus, and the window must not auto-hide behind it.
 pub(crate) static OS_AUTH_PROMPT_OPEN: AtomicBool = AtomicBool::new(false);
 
 /// Set when the process was started with `--tray` (e.g. OS login autostart entry).

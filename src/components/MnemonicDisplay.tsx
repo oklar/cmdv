@@ -14,8 +14,6 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
     null,
   );
 
-  // The app opens the save dialog and writes the file itself; the words never pass
-  // back through this page.
   const handleSave = async (format: "pdf" | "txt") => {
     setSaving(true);
     setNotice(null);
@@ -29,8 +27,6 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
     }
   };
 
-  // Copied by the app, marked private so clipboard history and clipboard managers
-  // skip it, and cleared after 30 seconds.
   const handleCopy = async () => {
     setNotice(null);
     try {

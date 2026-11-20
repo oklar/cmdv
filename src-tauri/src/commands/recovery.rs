@@ -1,7 +1,4 @@
-//! Everything that reveals the 24-word recovery phrase. The words are always read from the OS
-//! keychain here, never taken from the webview, and each way out is guarded:
-//! - copying and saving are only allowed while the setup wizard shows the phrase;
-//! - the QR code needs the OS identity prompt (Windows Hello) when the device has one.
+//! Reveals the recovery phrase. The words always come from the keychain, never from the webview.
 
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -21,8 +18,6 @@ use crate::storage::SeedStore;
 
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
-/// A copied recovery phrase is removed from the clipboard after this long, unless something
-/// else has been copied since.
 const CLIPBOARD_CLEAR_AFTER: Duration = Duration::from_secs(30);
 
 const OS_AUTH_MESSAGE: &str = "Confirm it's you to show your cmdv recovery phrase";
@@ -34,8 +29,6 @@ fn ensure_unlocked(vault: &VaultState) -> Result<(), String> {
     Ok(())
 }
 
-/// Copy and save exist only on the setup wizard's recovery phrase screen. Once setup is
-/// finished, the QR code (behind the OS prompt) is the only way to see the phrase again.
 fn ensure_setup_in_progress(vault: &VaultState) -> Result<(), String> {
     if vault.setup_complete.load(Ordering::Relaxed) {
         return Err("The recovery phrase can only be copied or saved during setup.".into());
@@ -43,7 +36,6 @@ fn ensure_setup_in_progress(vault: &VaultState) -> Result<(), String> {
     Ok(())
 }
 
-/// The 24 recovery words for the master key stored in the OS keychain.
 fn recovery_words(vault: &VaultState) -> Result<Zeroizing<Vec<String>>, String> {
     ensure_unlocked(vault)?;
     let mut seed = KeychainStore::new().load_seed()?;
@@ -58,15 +50,12 @@ fn recovery_words(vault: &VaultState) -> Result<Zeroizing<Vec<String>>, String> 
     Ok(Zeroizing::new(mnemonic.words().map(String::from).collect()))
 }
 
-/// Puts the recovery phrase on the clipboard, marked private so clipboard history, cloud
-/// clipboard and other clipboard managers skip it, and clears it after 30 seconds.
 #[tauri::command]
 pub fn copy_recovery_phrase(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
     ensure_setup_in_progress(&vault)?;
     let words = recovery_words(&vault)?;
     let phrase = Zeroizing::new(words.join(" "));
 
-    // On Windows our monitor also honours the private marker; this covers the other platforms.
     crate::commands::secure_paste::set_clipboard_skip_hash(vault.inner(), phrase.as_bytes())?;
     crate::clipboard::set_private_text(&phrase)?;
 
@@ -78,8 +67,7 @@ pub fn copy_recovery_phrase(vault: State<'_, Arc<VaultState>>) -> Result<(), Str
     Ok(())
 }
 
-/// Saves the recovery phrase as PDF or text to a file the user picks in a native dialog opened
-/// here, so the webview never supplies a path or the words. Returns false if the user cancels.
+/// Returns false if the user cancels the save dialog.
 #[tauri::command]
 pub async fn save_recovery_phrase(
     window: WebviewWindow,
@@ -162,16 +150,11 @@ impl SaveFormat {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum RecoveryQr {
     Shown { qr: String },
-    /// This device has no OS prompt; ask again with `allow_without_os_auth` after the user
-    /// has seen the warning.
     AuthUnavailable,
-    /// The user dismissed or failed the OS prompt.
     Cancelled,
 }
 
-/// Returns the recovery phrase as a QR code (an SVG data URL) for pairing another device.
-/// Where Windows Hello is set up, the user must pass it first, whatever `allow_without_os_auth`
-/// says. Without an OS prompt, the QR is only returned when `allow_without_os_auth` is true.
+/// `allow_without_os_auth` only matters on devices without Windows Hello.
 #[tauri::command]
 pub async fn show_recovery_qr(
     window: WebviewWindow,
@@ -181,7 +164,6 @@ pub async fn show_recovery_qr(
     ensure_unlocked(&vault)?;
 
     let native_window = native_window_handle(&window);
-    // The prompt takes focus; don't let the window auto-hide behind it.
     crate::OS_AUTH_PROMPT_OPEN.store(true, Ordering::Relaxed);
     let auth = tauri::async_runtime::spawn_blocking(move || {
         os_auth::verify_user(native_window, OS_AUTH_MESSAGE)
