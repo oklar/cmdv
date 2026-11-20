@@ -24,6 +24,144 @@ pub fn get_foreground_app() -> Option<String> {
     }
 }
 
+pub fn clipboard_marked_private() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        clipboard_marked_private_windows()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        clipboard_marked_private_x11().unwrap_or(false)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        false
+    }
+}
+
+/// arboard reads the clipboard over X11 (XWayland on Wayland), so the hint is read the same way.
+#[cfg(target_os = "linux")]
+fn clipboard_marked_private_x11() -> Option<bool> {
+    use std::time::{Duration, Instant};
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, CreateWindowAux, WindowClass};
+    use x11rb::protocol::Event;
+    use x11rb::{COPY_DEPTH_FROM_PARENT, COPY_FROM_PARENT, CURRENT_TIME, NONE};
+
+    let (conn, screen_num) = x11rb::connect(None).ok()?;
+    let atom = |name: &[u8]| -> Option<u32> {
+        Some(conn.intern_atom(false, name).ok()?.reply().ok()?.atom)
+    };
+    let clipboard = atom(b"CLIPBOARD")?;
+    let hint = atom(b"x-kde-passwordManagerHint")?;
+    let property = atom(b"CMDV_PASSWORD_HINT")?;
+
+    if conn.get_selection_owner(clipboard).ok()?.reply().ok()?.owner == NONE {
+        return Some(false);
+    }
+
+    let window = conn.generate_id().ok()?;
+    conn.create_window(
+        COPY_DEPTH_FROM_PARENT,
+        window,
+        conn.setup().roots[screen_num].root,
+        0,
+        0,
+        1,
+        1,
+        0,
+        WindowClass::INPUT_ONLY,
+        COPY_FROM_PARENT,
+        &CreateWindowAux::new(),
+    )
+    .ok()?;
+    conn.convert_selection(window, clipboard, hint, property, CURRENT_TIME)
+        .ok()?;
+    conn.flush().ok()?;
+
+    let deadline = Instant::now() + Duration::from_millis(200);
+    while Instant::now() < deadline {
+        match conn.poll_for_event().ok()? {
+            Some(Event::SelectionNotify(event)) if event.requestor == window => {
+                if event.property == NONE {
+                    return Some(false);
+                }
+                let reply = conn
+                    .get_property(true, window, property, AtomEnum::ANY, 0, 64)
+                    .ok()?
+                    .reply()
+                    .ok()?;
+                return Some(reply.value.starts_with(b"secret"));
+            }
+            Some(_) => {}
+            None => std::thread::sleep(Duration::from_millis(5)),
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_format(name: &str) -> u32 {
+    use windows_sys::Win32::System::DataExchange::RegisterClipboardFormatW;
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe { RegisterClipboardFormatW(wide.as_ptr()) }
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_marked_private_windows() -> bool {
+    use windows_sys::Win32::System::DataExchange::IsClipboardFormatAvailable;
+
+    for name in [
+        "ExcludeClipboardContentFromMonitorProcessing",
+        "Clipboard Viewer Ignore",
+    ] {
+        let format = clipboard_format(name);
+        if format != 0 && unsafe { IsClipboardFormatAvailable(format) } != 0 {
+            return true;
+        }
+    }
+
+    let history = clipboard_format("CanIncludeInClipboardHistory");
+    if history != 0 && unsafe { IsClipboardFormatAvailable(history) } != 0 {
+        // If the value can't be read right now, skip this poll; the next one tries again.
+        return read_clipboard_u32(history).map_or(true, |value| value == 0);
+    }
+
+    false
+}
+
+#[cfg(target_os = "windows")]
+fn read_clipboard_u32(format: u32) -> Option<u32> {
+    use windows_sys::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+    use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+
+    unsafe {
+        let mut opened = false;
+        for _ in 0..5 {
+            if OpenClipboard(core::ptr::null_mut()) != 0 {
+                opened = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if !opened {
+            return None;
+        }
+
+        let mut value = None;
+        let handle = GetClipboardData(format);
+        if !handle.is_null() && GlobalSize(handle) >= 4 {
+            let ptr = GlobalLock(handle) as *const u32;
+            if !ptr.is_null() {
+                value = Some(ptr.read_unaligned());
+                GlobalUnlock(handle);
+            }
+        }
+        CloseClipboard();
+        value
+    }
+}
+
 pub fn is_excluded_app(app_name: &str) -> bool {
     let lower = app_name.to_lowercase();
     EXCLUDED_APPS
@@ -97,5 +235,62 @@ fn get_foreground_app_macos() -> Option<String> {
         }
     } else {
         None
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use arboard::SetExtWindows;
+
+    /// Uses the real clipboard; writes are marked private and the previous text is restored.
+    #[test]
+    #[ignore]
+    fn private_markers_are_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        let previous = clipboard.get_text().ok();
+
+        clipboard
+            .set()
+            .exclude_from_monitoring()
+            .text("cmdv monitor marker test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "ExcludeClipboardContentFromMonitorProcessing");
+
+        clipboard
+            .set()
+            .exclude_from_history()
+            .text("cmdv history marker test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "CanIncludeInClipboardHistory = 0");
+
+        clipboard.clear().unwrap();
+        assert!(!clipboard_marked_private(), "an empty clipboard is not flagged");
+
+        if let Some(text) = previous {
+            clipboard.set().exclude_from_monitoring().text(text).unwrap();
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use arboard::SetExtLinux;
+
+    /// Needs an X11 display (or XWayland).
+    #[test]
+    #[ignore]
+    fn private_hint_is_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        clipboard
+            .set()
+            .exclude_from_history()
+            .text("cmdv private hint test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "x-kde-passwordManagerHint = secret");
+
+        clipboard.clear().unwrap();
+        assert!(!clipboard_marked_private(), "an empty clipboard is not flagged");
     }
 }

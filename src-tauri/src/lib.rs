@@ -3,6 +3,7 @@ pub mod commands;
 pub mod crypto;
 pub mod db;
 pub mod image;
+pub mod os_auth;
 pub mod storage;
 pub mod sync;
 
@@ -17,6 +18,9 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use tauri_plugin_positioner::{Position, WindowExt};
 
 static SUPPRESS_BLUR_HIDE: AtomicBool = AtomicBool::new(false);
+
+/// Set while Windows Hello is open: it takes focus, and the window must not auto-hide behind it.
+pub(crate) static OS_AUTH_PROMPT_OPEN: AtomicBool = AtomicBool::new(false);
 
 /// Set when the process was started with `--tray` (e.g. OS login autostart entry).
 static LAUNCHED_WITH_TRAY: OnceLock<bool> = OnceLock::new();
@@ -330,7 +334,9 @@ pub fn run() {
                 let handle = window.app_handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(200));
-                    if SUPPRESS_BLUR_HIDE.load(Ordering::Relaxed) {
+                    if SUPPRESS_BLUR_HIDE.load(Ordering::Relaxed)
+                        || OS_AUTH_PROMPT_OPEN.load(Ordering::Relaxed)
+                    {
                         return;
                     }
                     let should_hide = handle
@@ -381,9 +387,9 @@ pub fn run() {
             commands::vault::try_auto_unlock,
             commands::vault::recover_vault,
             commands::vault::lock_vault,
-            commands::vault::export_mnemonic,
             commands::vault::reset_vault,
-            commands::vault::generate_pairing_qr,
+            commands::recovery::save_recovery_phrase,
+            commands::recovery::show_recovery_qr,
             commands::vault::export_database,
             commands::vault::import_database,
             commands::sync::sync_now,
