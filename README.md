@@ -37,7 +37,7 @@
 - **Encrypted vault** — history is stored in a SQLCipher database; keys live in the OS keychain (Windows Credential Manager / Linux Secret Service)
 - **Recovery phrase** — BIP-39 mnemonic for recovery and device pairing (QR). Copying it during setup marks it private and clears the clipboard after 30 seconds; the pairing QR asks for Windows Hello first where it is set up, and hides after a minute
 - **Secure paste** — hotkey (Ctrl+Shift+C) creates a one-time encrypted link; ciphertext is uploaded, the decryption key stays in the URL fragment (not sent to the server). Paste links opened in a browser can hand off to the desktop app via `cmdv://`
-- **Password-manager awareness** — skips capture when the foreground app is a known password manager (Windows)
+- **Password-manager awareness** — skips content the copying app marks private, as KeePass and KeePassXC do (the Windows clipboard formats, or `x-kde-passwordManagerHint` on Linux), and capture while a known password manager is in front (Windows)
 - **Search and filter** — full-text search with content type filtering and favorites
 - **Encrypted backup** — export and import an encrypted blob of your history (manual sync between devices today)
 - **System tray** — runs in the background; global shortcut Ctrl+U to open

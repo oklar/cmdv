@@ -56,6 +56,10 @@ impl ClipboardMonitor {
         max_entry_size: usize,
         clipboard_skip_hash: &Arc<Mutex<Option<Vec<u8>>>>,
     ) -> Result<Option<String>, String> {
+        if source::clipboard_marked_private() {
+            return Ok(None);
+        }
+
         let source_app = source::get_foreground_app();
         if let Some(ref app) = source_app {
             if source::is_excluded_with_custom(app, &self.excluded_apps) {

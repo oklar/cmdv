@@ -62,17 +62,6 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    fn excluded_from_monitoring() -> bool {
-        use windows_sys::Win32::System::DataExchange::{
-            IsClipboardFormatAvailable, RegisterClipboardFormatW,
-        };
-        let name: Vec<u16> = "ExcludeClipboardContentFromMonitorProcessing"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        unsafe { IsClipboardFormatAvailable(RegisterClipboardFormatW(name.as_ptr())) != 0 }
-    }
-
     /// Uses the real clipboard; writes are marked private and the previous text is restored.
     #[test]
     #[ignore]
@@ -81,7 +70,23 @@ mod tests {
         let previous = clipboard.get_text().ok();
 
         set_private_text("cmdv private clipboard test").unwrap();
-        assert!(excluded_from_monitoring(), "the copy is marked private");
+        assert!(source::clipboard_marked_private(), "our private copy is detected");
+
+        clipboard.clear().unwrap();
+        assert!(!source::clipboard_marked_private(), "an empty clipboard is not flagged");
+
+        {
+            use arboard::SetExtWindows;
+            clipboard
+                .set()
+                .exclude_from_history()
+                .text("cmdv history flag test")
+                .unwrap();
+        }
+        assert!(
+            source::clipboard_marked_private(),
+            "CanIncludeInClipboardHistory = 0 is detected"
+        );
 
         let digest: [u8; 32] = Sha256::digest(b"cmdv private clipboard test").into();
         set_private_text("something copied later").unwrap();
@@ -105,5 +110,22 @@ mod tests {
                 let _ = clipboard.clear();
             }
         }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod linux_tests {
+    use super::*;
+
+    /// Needs an X11 display (or XWayland).
+    #[test]
+    #[ignore]
+    fn private_copy_is_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        set_private_text("cmdv private clipboard test").unwrap();
+        assert!(source::clipboard_marked_private(), "our private copy is detected");
+
+        clipboard.clear().unwrap();
+        assert!(!source::clipboard_marked_private(), "an empty clipboard is not flagged");
     }
 }
