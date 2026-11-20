@@ -135,6 +135,17 @@ git push origin v0.9.4
 
 Existing users receive the update automatically on next app launch.
 
+### Workflow security
+
+The Release job holds the updater signing key. Anyone who gets code into that job can sign an update that every installed cmdv will accept, so:
+
+- **Actions are pinned to commit SHAs**, with the version in a comment (`uses: owner/action@<sha> # v1.2.3`). A tag like `@v4` can be moved to new code by whoever controls the action's repo; a SHA can't. Never add an action by tag.
+- **Dependabot** (`.github/dependabot.yml`) opens weekly PRs that bump the pinned SHAs. Before merging one, check the action's release notes and that the SHA belongs to the tagged release.
+- **The signing key is only passed to the `tauri-action` step**, as step-level `env`. Don't move it to job or workflow level.
+- **Checkout uses `persist-credentials: false`**, so the GitHub token isn't left in `.git/config` for later steps.
+
+If the signing key ever leaks, rotate it in `tauri.conf.json` (`plugins.updater.pubkey`) and in the repo secrets. Installed apps only trust the old key, so users on older versions will have to download the new release by hand.
+
 Avoid `git push --tags` for releases — it pushes every local tag and is easy to tag the wrong commit before the version bump is on `main`. To re-trigger a release after fixing a tag, delete it on the remote and push again:
 
 ```bash
