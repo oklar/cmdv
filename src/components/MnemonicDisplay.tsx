@@ -8,7 +8,6 @@ interface MnemonicDisplayProps {
 
 export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   const [confirmed, setConfirmed] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(
     null,
@@ -24,21 +23,6 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
       setNotice({ text: `Could not save: ${String(e)}`, error: true });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    setNotice(null);
-    try {
-      await invoke("copy_recovery_phrase");
-      setCopied(true);
-      setNotice({
-        text: "Copied. Your clipboard is cleared in 30 seconds.",
-        error: false,
-      });
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      setNotice({ text: `Could not copy: ${String(e)}`, error: true });
     }
   };
 
@@ -83,12 +67,6 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
           className="btn btn-outline h-8 flex-1 px-2 text-xs"
         >
           Save as Text
-        </button>
-        <button
-          onClick={handleCopy}
-          className="btn btn-outline h-8 flex-1 px-2 text-xs"
-        >
-          {copied ? "Copied!" : "Copy"}
         </button>
       </div>
 

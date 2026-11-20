@@ -388,7 +388,6 @@ pub fn run() {
             commands::vault::recover_vault,
             commands::vault::lock_vault,
             commands::vault::reset_vault,
-            commands::recovery::copy_recovery_phrase,
             commands::recovery::save_recovery_phrase,
             commands::recovery::show_recovery_qr,
             commands::vault::export_database,

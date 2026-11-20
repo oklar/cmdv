@@ -237,3 +237,60 @@ fn get_foreground_app_macos() -> Option<String> {
         None
     }
 }
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use arboard::SetExtWindows;
+
+    /// Uses the real clipboard; writes are marked private and the previous text is restored.
+    #[test]
+    #[ignore]
+    fn private_markers_are_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        let previous = clipboard.get_text().ok();
+
+        clipboard
+            .set()
+            .exclude_from_monitoring()
+            .text("cmdv monitor marker test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "ExcludeClipboardContentFromMonitorProcessing");
+
+        clipboard
+            .set()
+            .exclude_from_history()
+            .text("cmdv history marker test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "CanIncludeInClipboardHistory = 0");
+
+        clipboard.clear().unwrap();
+        assert!(!clipboard_marked_private(), "an empty clipboard is not flagged");
+
+        if let Some(text) = previous {
+            clipboard.set().exclude_from_monitoring().text(text).unwrap();
+        }
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use arboard::SetExtLinux;
+
+    /// Needs an X11 display (or XWayland).
+    #[test]
+    #[ignore]
+    fn private_hint_is_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        clipboard
+            .set()
+            .exclude_from_history()
+            .text("cmdv private hint test")
+            .unwrap();
+        assert!(clipboard_marked_private(), "x-kde-passwordManagerHint = secret");
+
+        clipboard.clear().unwrap();
+        assert!(!clipboard_marked_private(), "an empty clipboard is not flagged");
+    }
+}

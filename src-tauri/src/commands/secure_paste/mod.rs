@@ -178,7 +178,7 @@ fn set_clipboard_text(value: &str) -> Result<(), String> {
     Err(format!("Could not copy link to clipboard: {last_err}"))
 }
 
-pub(crate) fn set_clipboard_skip_hash(vault: &Arc<VaultState>, content: &[u8]) -> Result<(), String> {
+fn set_clipboard_skip_hash(vault: &Arc<VaultState>, content: &[u8]) -> Result<(), String> {
     let hash_key = {
         let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
         guard.as_ref().map(|k| k.hash_key)

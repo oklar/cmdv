@@ -3,10 +3,8 @@
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use tauri::{State, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
 use zeroize::{Zeroize, Zeroizing};
@@ -17,8 +15,6 @@ use crate::storage::keychain::KeychainStore;
 use crate::storage::SeedStore;
 
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
-
-const CLIPBOARD_CLEAR_AFTER: Duration = Duration::from_secs(30);
 
 const OS_AUTH_MESSAGE: &str = "Confirm it's you to show your cmdv recovery phrase";
 
@@ -31,7 +27,7 @@ fn ensure_unlocked(vault: &VaultState) -> Result<(), String> {
 
 fn ensure_setup_in_progress(vault: &VaultState) -> Result<(), String> {
     if vault.setup_complete.load(Ordering::Relaxed) {
-        return Err("The recovery phrase can only be copied or saved during setup.".into());
+        return Err("The recovery phrase can only be saved during setup.".into());
     }
     Ok(())
 }
@@ -48,23 +44,6 @@ fn recovery_words(vault: &VaultState) -> Result<Zeroizing<Vec<String>>, String> 
     let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
         .map_err(|e| format!("BIP39 error: {e}"))?;
     Ok(Zeroizing::new(mnemonic.words().map(String::from).collect()))
-}
-
-#[tauri::command]
-pub fn copy_recovery_phrase(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
-    ensure_setup_in_progress(&vault)?;
-    let words = recovery_words(&vault)?;
-    let phrase = Zeroizing::new(words.join(" "));
-
-    crate::commands::secure_paste::set_clipboard_skip_hash(vault.inner(), phrase.as_bytes())?;
-    crate::clipboard::set_private_text(&phrase)?;
-
-    let digest: [u8; 32] = Sha256::digest(phrase.as_bytes()).into();
-    std::thread::spawn(move || {
-        std::thread::sleep(CLIPBOARD_CLEAR_AFTER);
-        crate::clipboard::clear_if_unchanged(&digest);
-    });
-    Ok(())
 }
 
 /// Returns false if the user cancels the save dialog.
@@ -342,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn copy_and_save_are_refused_after_setup() {
+    fn save_is_refused_after_setup() {
         let vault = VaultState::new();
         assert!(ensure_setup_in_progress(&vault).is_ok());
         vault.setup_complete.store(true, Ordering::Relaxed);
