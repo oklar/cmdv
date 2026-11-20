@@ -14,8 +14,6 @@ use crate::db::Database;
 use crate::storage::keychain::KeychainStore;
 use crate::storage::SeedStore;
 
-const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
-
 #[derive(Serialize)]
 pub struct VaultStatus {
     pub setup_complete: bool,
@@ -199,133 +197,6 @@ pub fn reset_vault(
     Ok(())
 }
 
-#[tauri::command]
-pub fn export_mnemonic(path: String, words: Vec<String>, format: String) -> Result<(), String> {
-    let content = match format.as_str() {
-        "txt" => generate_txt(&words),
-        "pdf" => return write_pdf(&path, &words),
-        _ => return Err(format!("Unknown format: {}", format)),
-    };
-    std::fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))
-}
-
-fn generate_txt(words: &[String]) -> String {
-    let mut out = String::new();
-    out.push_str("CMDV Recovery Phrase\n");
-    out.push_str("===================\n\n");
-    out.push_str("Keep this file in a safe place. These 24 words are the key\n");
-    out.push_str("to your data — you need them to restore CMDV on a new device.\n\n");
-    for (i, word) in words.iter().enumerate() {
-        out.push_str(&format!("{:>2}. {}\n", i + 1, word));
-    }
-    out.push_str("\nWARNING: Anyone with these words can decrypt your clipboard\n");
-    out.push_str("data. Delete this file after storing the phrase securely.\n");
-    out
-}
-
-fn write_pdf(path: &str, words: &[String]) -> Result<(), String> {
-    let mut lines: Vec<String> = Vec::new();
-    lines.push("CMDV Recovery Kit".into());
-    lines.push(String::new());
-    lines.push("Keep this document in a safe place. These 24 words are the key".into());
-    lines.push("to your data — you need them to restore CMDV on a new device.".into());
-    lines.push(String::new());
-
-    for (chunk_idx, chunk) in words.chunks(4).enumerate() {
-        let idx_start = chunk_idx * 4;
-        let row: String = chunk
-            .iter()
-            .enumerate()
-            .map(|(j, w)| format!("{:>2}. {:<14}", idx_start + j + 1, w))
-            .collect::<Vec<_>>()
-            .join("  ");
-        lines.push(row);
-    }
-
-    lines.push(String::new());
-    lines.push("WARNING: Anyone with these words can decrypt your clipboard".into());
-    lines.push("data. Delete this file after storing the phrase securely.".into());
-
-    let font_size = 11;
-    let title_size = 18;
-    let leading = 16;
-    let page_width = 595;
-    let page_height = 842;
-    let margin = 50;
-
-    let mut text_ops = String::new();
-    text_ops.push_str("BT\n");
-
-    for (i, line) in lines.iter().enumerate() {
-        let y = page_height - margin - (i as i32) * leading;
-        if y < margin {
-            break;
-        }
-        let size = if i == 0 { title_size } else { font_size };
-        let escaped = line
-            .replace('\\', "\\\\")
-            .replace('(', "\\(")
-            .replace(')', "\\)");
-        if i == 0 {
-            text_ops.push_str(&format!(
-                "/F1 {} Tf {} {} Td ({}) Tj\n",
-                size, margin, y, escaped
-            ));
-        } else {
-            text_ops.push_str(&format!(
-                "/F1 {} Tf 0 -{} Td ({}) Tj\n",
-                size, leading, escaped
-            ));
-        }
-    }
-    text_ops.push_str("ET\n");
-
-    let stream = text_ops;
-    let stream_len = stream.len();
-
-    let mut pdf = String::new();
-    let mut offsets: Vec<usize> = Vec::new();
-
-    pdf.push_str("%PDF-1.4\n");
-
-    offsets.push(pdf.len());
-    pdf.push_str("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-
-    offsets.push(pdf.len());
-    pdf.push_str("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-
-    offsets.push(pdf.len());
-    pdf.push_str(&format!(
-        "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {} {}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
-        page_width, page_height
-    ));
-
-    offsets.push(pdf.len());
-    pdf.push_str(&format!(
-        "4 0 obj\n<< /Length {} >>\nstream\n{}endstream\nendobj\n",
-        stream_len, stream
-    ));
-
-    offsets.push(pdf.len());
-    pdf.push_str("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n");
-
-    let xref_offset = pdf.len();
-    pdf.push_str("xref\n");
-    pdf.push_str(&format!("0 {}\n", offsets.len() + 1));
-    pdf.push_str("0000000000 65535 f \n");
-    for off in &offsets {
-        pdf.push_str(&format!("{:010} 00000 n \n", off));
-    }
-
-    pdf.push_str("trailer\n");
-    pdf.push_str(&format!("<< /Size {} /Root 1 0 R >>\n", offsets.len() + 1));
-    pdf.push_str("startxref\n");
-    pdf.push_str(&format!("{}\n", xref_offset));
-    pdf.push_str("%%EOF\n");
-
-    std::fs::write(path, pdf.as_bytes()).map_err(|e| format!("Failed to write PDF: {}", e))
-}
-
 fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<SettingsDb>) {
     vault.monitor_stop.store(true, Ordering::Relaxed);
     std::thread::sleep(Duration::from_millis(100));
@@ -465,43 +336,6 @@ pub fn import_database(
         crate::commands::sync::trigger_sync();
     }
     Ok(imported)
-}
-
-#[tauri::command]
-pub fn generate_pairing_qr(vault: tauri::State<'_, Arc<VaultState>>) -> Result<String, String> {
-    let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
-    if guard.is_none() {
-        return Err("Vault is locked".into());
-    }
-    drop(guard);
-
-    let keychain = crate::storage::keychain::KeychainStore::new();
-    let mut seed = keychain.load_seed()?;
-    let mut master_bytes = [0u8; 32];
-    master_bytes.copy_from_slice(&seed[..32]);
-    seed.zeroize();
-    let master_key = crate::crypto::keys::MasterKey::from_bytes(master_bytes);
-    master_bytes.zeroize();
-
-    let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
-        .map_err(|e| format!("BIP39 error: {}", e))?;
-    let words: Vec<String> = mnemonic.words().map(String::from).collect();
-    let mut payload = words.join(" ");
-
-    use qrcode::render::svg;
-    use qrcode::QrCode;
-
-    let code =
-        QrCode::new(payload.as_bytes()).map_err(|e| format!("QR generation error: {}", e))?;
-    payload.zeroize();
-    let svg_str = code.render::<svg::Color>().min_dimensions(256, 256).build();
-
-    let data_url = format!(
-        "data:image/svg+xml;base64,{}",
-        base64::Engine::encode(&B64, svg_str.as_bytes())
-    );
-
-    Ok(data_url)
 }
 
 pub(crate) fn enforce_storage_limit(db: &Database, max_total_size: i64) {

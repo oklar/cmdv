@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
 
 interface MnemonicDisplayProps {
   words: string[];
@@ -11,33 +10,40 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
   const [confirmed, setConfirmed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(
+    null,
+  );
 
+  // The app opens the save dialog and writes the file itself; the words never pass
+  // back through this page.
   const handleSave = async (format: "pdf" | "txt") => {
-    const ext = format === "pdf" ? "pdf" : "txt";
-    const defaultName =
-      format === "pdf" ? "cmdv-recovery-kit.pdf" : "cmdv-recovery-phrase.txt";
-
-    const path = await save({
-      defaultPath: defaultName,
-      filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
-    });
-
-    if (!path) return;
-
     setSaving(true);
+    setNotice(null);
     try {
-      await invoke("export_mnemonic", { path, words, format });
+      const saved = await invoke<boolean>("save_recovery_phrase", { format });
+      if (saved) setNotice({ text: "Saved.", error: false });
     } catch (e) {
-      console.error("Export failed:", e);
+      setNotice({ text: `Could not save: ${String(e)}`, error: true });
     } finally {
       setSaving(false);
     }
   };
 
+  // Copied by the app, marked private so clipboard history and clipboard managers
+  // skip it, and cleared after 30 seconds.
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(words.join(" "));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setNotice(null);
+    try {
+      await invoke("copy_recovery_phrase");
+      setCopied(true);
+      setNotice({
+        text: "Copied. Your clipboard is cleared in 30 seconds.",
+        error: false,
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      setNotice({ text: `Could not copy: ${String(e)}`, error: true });
+    }
   };
 
   return (
@@ -89,6 +95,14 @@ export function MnemonicDisplay({ words, onConfirm }: MnemonicDisplayProps) {
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
+
+      {notice && (
+        <p
+          className={`text-xs ${notice.error ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {notice.text}
+        </p>
+      )}
 
       <p className="callout-warning">
         If you lose these words and all your devices, your data cannot be
