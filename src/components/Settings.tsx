@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { save, open } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
@@ -162,19 +161,11 @@ export function Settings() {
           <SettingRow label="Export" description="Save encrypted backup">
             <button
               onClick={async () => {
-                const path = await save({
-                  defaultPath: "cmdv-backup.bin",
-                  filters: [{ name: "CMDV Backup", extensions: ["bin"] }],
-                });
-                if (path) {
-                  try {
-                    const count = await invoke<number>("export_database", {
-                      path,
-                    });
-                    alert(`Exported ${count} entries`);
-                  } catch (err) {
-                    alert(String(err));
-                  }
+                try {
+                  const count = await invoke<number | null>("export_database");
+                  if (count !== null) alert(`Exported ${count} entries`);
+                } catch (err) {
+                  alert(String(err));
                 }
               }}
               className="btn btn-sm btn-outline"
@@ -188,19 +179,11 @@ export function Settings() {
           >
             <button
               onClick={async () => {
-                const path = await open({
-                  filters: [{ name: "CMDV Backup", extensions: ["bin"] }],
-                  multiple: false,
-                });
-                if (path) {
-                  try {
-                    const count = await invoke<number>("import_database", {
-                      path,
-                    });
-                    alert(`Imported ${count} new entries`);
-                  } catch (err) {
-                    alert(String(err));
-                  }
+                try {
+                  const count = await invoke<number | null>("import_database");
+                  if (count !== null) alert(`Imported ${count} new entries`);
+                } catch (err) {
+                  alert(String(err));
                 }
               }}
               className="btn btn-sm btn-outline"
