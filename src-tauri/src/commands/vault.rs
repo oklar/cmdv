@@ -5,6 +5,7 @@ use std::time::Duration;
 use bip39::Mnemonic;
 use serde::Serialize;
 use tauri::{Manager, State};
+use tauri_plugin_dialog::DialogExt;
 use zeroize::Zeroize;
 
 use crate::clipboard;
@@ -249,12 +250,31 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     log::info!("Clipboard monitoring started");
 }
 
+/// Returns None if the user cancels the save dialog.
 #[tauri::command]
-pub fn export_database(
-    path: String,
+pub async fn export_database(
+    window: tauri::WebviewWindow,
     vault: tauri::State<'_, Arc<VaultState>>,
     db: tauri::State<'_, Arc<Database>>,
-) -> Result<usize, String> {
+) -> Result<Option<usize>, String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
+    let dialog_window = window.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog_window
+            .dialog()
+            .file()
+            .set_parent(&dialog_window)
+            .set_file_name("cmdv-backup.bin")
+            .add_filter("CMDV Backup", &["bin"])
+            .blocking_save_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+
     let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
     guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
@@ -277,17 +297,35 @@ pub fn export_database(
         "Exported {} entries ({} bytes) to {}",
         entry_count,
         encrypted.len(),
-        path
+        path.display()
     );
-    Ok(entry_count)
+    Ok(Some(entry_count))
 }
 
+/// Returns None if the user cancels the open dialog.
 #[tauri::command]
-pub fn import_database(
-    path: String,
+pub async fn import_database(
+    window: tauri::WebviewWindow,
     vault: tauri::State<'_, Arc<VaultState>>,
     db: tauri::State<'_, Arc<Database>>,
-) -> Result<usize, String> {
+) -> Result<Option<usize>, String> {
+    vault.keys.lock().map_err(|_| "Lock poisoned")?.as_ref().ok_or("Vault is locked")?;
+    let dialog_window = window.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        dialog_window
+            .dialog()
+            .file()
+            .set_parent(&dialog_window)
+            .add_filter("CMDV Backup", &["bin"])
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+
     let guard = vault.keys.lock().map_err(|_| "Lock poisoned")?;
     guard.as_ref().ok_or("Vault is locked")?;
     let blob_key = {
@@ -331,11 +369,11 @@ pub fn import_database(
         }
     }
 
-    log::info!("Imported {} new entries from {}", imported, path);
+    log::info!("Imported {} new entries from {}", imported, path.display());
     if imported > 0 {
         crate::commands::sync::trigger_sync();
     }
-    Ok(imported)
+    Ok(Some(imported))
 }
 
 pub(crate) fn enforce_storage_limit(db: &Database, max_total_size: i64) {
