@@ -313,6 +313,7 @@ fn merge_downloaded(
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,
                 is_favorite: entry.is_favorite,
+                local_only: entry.local_only,
             };
             db.insert_entry(&new_entry).map_err(|e| e.to_string())?;
         }
@@ -504,6 +505,7 @@ mod tests {
             content_hash: hash,
             size_bytes: content.len() as i64,
             is_favorite: false,
+            local_only: false,
         }
     }
 
@@ -565,6 +567,7 @@ mod tests {
                         content_hash: e.content_hash.clone(),
                         size_bytes: e.size_bytes,
                         is_favorite: e.is_favorite,
+                        local_only: e.local_only,
                     })
                     .unwrap();
             }

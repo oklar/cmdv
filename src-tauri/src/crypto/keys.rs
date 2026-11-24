@@ -135,7 +135,7 @@ impl VaultState {
     }
 }
 
-fn derive_key(ikm: &[u8], info: &[u8]) -> [u8; 32] {
+pub(crate) fn derive_key(ikm: &[u8], info: &[u8]) -> [u8; 32] {
     let hk = Hkdf::<Sha256>::new(None, ikm);
     let mut okm = [0u8; 32];
     hk.expand(info, &mut okm)

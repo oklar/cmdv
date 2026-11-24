@@ -363,6 +363,7 @@ pub async fn import_database(
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,
                 is_favorite: entry.is_favorite,
+                local_only: entry.local_only,
             };
             db.insert_entry(&new_entry).map_err(|e| e.to_string())?;
             imported += 1;
