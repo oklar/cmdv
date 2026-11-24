@@ -114,14 +114,18 @@ mod tests {
     #[test]
     fn sealed_bundle_does_not_open_with_another_phrase() {
         let master = MasterKey::from_bytes([7u8; 32]);
-        let sealed = KeyBundle::generate(1, master.derive_hash_key()).seal(&master).unwrap();
+        let sealed = KeyBundle::generate(1, master.derive_hash_key())
+            .seal(&master)
+            .unwrap();
         assert!(KeyBundle::open(&MasterKey::from_bytes([8u8; 32]), &sealed).is_err());
     }
 
     #[test]
     fn changed_bundle_does_not_open() {
         let master = MasterKey::from_bytes([7u8; 32]);
-        let mut sealed = KeyBundle::generate(1, master.derive_hash_key()).seal(&master).unwrap();
+        let mut sealed = KeyBundle::generate(1, master.derive_hash_key())
+            .seal(&master)
+            .unwrap();
         *sealed.last_mut().unwrap() ^= 1;
         assert!(KeyBundle::open(&master, &sealed).is_err());
     }

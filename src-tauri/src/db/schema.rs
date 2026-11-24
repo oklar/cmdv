@@ -53,7 +53,9 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
     if version as usize > MIGRATIONS.len() {
         return Err(rusqlite::Error::SqliteFailure(
             rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
-            Some("This vault was opened by a newer version of cmdv. Update cmdv to open it.".into()),
+            Some(
+                "This vault was opened by a newer version of cmdv. Update cmdv to open it.".into(),
+            ),
         ));
     }
 
@@ -119,7 +121,9 @@ mod tests {
         assert_eq!(sync_id, None);
         for table in ["sync_outbox", "sync_recent_deletes", "sync_meta"] {
             let count: i64 = conn
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
                 .unwrap();
             assert_eq!(count, 0, "{table}");
         }
@@ -128,7 +132,8 @@ mod tests {
     #[test]
     fn newer_database_is_refused() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.pragma_update(None, "user_version", MIGRATIONS.len() as u32 + 1).unwrap();
+        conn.pragma_update(None, "user_version", MIGRATIONS.len() as u32 + 1)
+            .unwrap();
         assert!(initialize(&conn).is_err());
     }
 }

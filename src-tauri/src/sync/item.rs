@@ -55,8 +55,8 @@ pub struct SyncItem {
 
 /// The same content gets the same id on every device of the account.
 pub fn item_id(keys: &ItemKeys, content_hash: &[u8]) -> String {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&keys.id_key)
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        <Hmac<Sha256> as Mac>::new_from_slice(&keys.id_key).expect("HMAC accepts any key length");
     mac.update(content_hash);
     URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
 }
@@ -97,7 +97,13 @@ pub fn decrypt(keys: &ItemKeys, item: &SyncItem) -> Result<Option<EntryPayload>,
     let cipher = Aes256Gcm::new_from_slice(&keys.enc_key).map_err(|e| e.to_string())?;
     let plaintext = Zeroizing::new(
         cipher
-            .decrypt(Nonce::from_slice(nonce), Payload { msg: body, aad: &ad })
+            .decrypt(
+                Nonce::from_slice(nonce),
+                Payload {
+                    msg: body,
+                    aad: &ad,
+                },
+            )
             .map_err(|_| "Sync item doesn't decrypt with this account's keys".to_string())?,
     );
 
@@ -119,7 +125,13 @@ fn seal(keys: &ItemKeys, id: &str, kind: ItemKind, plaintext: &[u8]) -> Result<V
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let ad = associated_data(id, kind, keys.key_version);
     let body = cipher
-        .encrypt(&nonce, Payload { msg: plaintext, aad: &ad })
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: plaintext,
+                aad: &ad,
+            },
+        )
         .map_err(|e| e.to_string())?;
 
     let mut ciphertext = Vec::with_capacity(NONCE_LEN + body.len());
@@ -254,13 +266,22 @@ mod tests {
         let item = encrypt_entry(&keys, &text_entry("hello")).unwrap();
         let other_id = item_id(&keys, b"other content");
 
-        let moved = SyncItem { id: other_id, ..item.clone() };
+        let moved = SyncItem {
+            id: other_id,
+            ..item.clone()
+        };
         assert!(decrypt(&keys, &moved).is_err());
 
-        let retyped = SyncItem { kind: ItemKind::Delete, ..item.clone() };
+        let retyped = SyncItem {
+            kind: ItemKind::Delete,
+            ..item.clone()
+        };
         assert!(decrypt(&keys, &retyped).is_err());
 
-        let reversioned = SyncItem { key_version: 2, ..item.clone() };
+        let reversioned = SyncItem {
+            key_version: 2,
+            ..item.clone()
+        };
         assert!(decrypt(&keys, &reversioned).is_err());
 
         let mut tampered = item.clone();
@@ -277,7 +298,9 @@ mod tests {
     #[test]
     fn same_content_gets_the_same_id_on_every_device() {
         let master = MasterKey::from_bytes([5u8; 32]);
-        let sealed = KeyBundle::generate(1, master.derive_hash_key()).seal(&master).unwrap();
+        let sealed = KeyBundle::generate(1, master.derive_hash_key())
+            .seal(&master)
+            .unwrap();
         let device_a = KeyBundle::open(&master, &sealed).unwrap();
         let device_b = KeyBundle::open(&master, &sealed).unwrap();
 
@@ -286,9 +309,17 @@ mod tests {
         let id = item_id(&device_a.item_keys(), &hash_a);
         assert_eq!(id, item_id(&device_b.item_keys(), &hash_b));
         assert_eq!(id.len(), 43);
-        assert!(id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
 
-        assert_ne!(id, item_id(&device_a.item_keys(), &keyed_hash(device_a.hash_key(), b"other")));
+        assert_ne!(
+            id,
+            item_id(
+                &device_a.item_keys(),
+                &keyed_hash(device_a.hash_key(), b"other")
+            )
+        );
         assert_ne!(id, item_id(&keys(), &hash_a));
     }
 
@@ -298,7 +329,13 @@ mod tests {
         let entry = text_entry("hello");
         let wrong_id = item_id(&keys, b"other content");
         let item = SyncItem {
-            ciphertext: seal(&keys, &wrong_id, ItemKind::Entry, &encode_entry(&entry).unwrap()).unwrap(),
+            ciphertext: seal(
+                &keys,
+                &wrong_id,
+                ItemKind::Entry,
+                &encode_entry(&entry).unwrap(),
+            )
+            .unwrap(),
             id: wrong_id,
             kind: ItemKind::Entry,
             key_version: 1,
