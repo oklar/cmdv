@@ -209,6 +209,7 @@ pub fn copy_entry_to_clipboard(
     }
 
     db.touch_entry(&id).map_err(|e| e.to_string())?;
+    crate::commands::sync::trigger_sync();
 
     Ok(())
 }

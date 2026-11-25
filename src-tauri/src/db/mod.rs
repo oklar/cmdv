@@ -1,6 +1,7 @@
 pub mod entries;
 pub mod schema;
 pub mod settings;
+pub mod sync_state;
 
 use rusqlite::Connection;
 use std::path::Path;
@@ -64,9 +65,33 @@ impl Database {
         guard.take();
     }
 
-    pub fn insert_entry(&self, entry: &NewEntry) -> Result<String, rusqlite::Error> {
+    pub(crate) fn with_conn<T>(
+        &self,
+        f: impl FnOnce(&Connection) -> Result<T, rusqlite::Error>,
+    ) -> Result<T, rusqlite::Error> {
         let guard = self.conn()?;
-        entries::insert_entry(guard.as_ref().unwrap(), entry)
+        f(guard.as_ref().unwrap())
+    }
+
+    /// Runs `f` in one transaction. The user-facing changes below use it to change an entry and
+    /// queue that change for sync together.
+    fn in_transaction<T>(
+        &self,
+        f: impl FnOnce(&Connection) -> Result<T, rusqlite::Error>,
+    ) -> Result<T, rusqlite::Error> {
+        let guard = self.conn()?;
+        let tx = guard.as_ref().unwrap().unchecked_transaction()?;
+        let result = f(&tx)?;
+        tx.commit()?;
+        Ok(result)
+    }
+
+    pub fn insert_entry(&self, entry: &NewEntry) -> Result<String, rusqlite::Error> {
+        self.in_transaction(|conn| {
+            let id = entries::insert_entry(conn, entry)?;
+            sync_state::queue_upsert(conn, &entry.content_hash)?;
+            Ok(id)
+        })
     }
 
     pub fn get_entry(&self, id: &str) -> Result<Option<ClipboardEntry>, rusqlite::Error> {
@@ -101,13 +126,21 @@ impl Database {
     }
 
     pub fn toggle_favorite(&self, id: &str) -> Result<bool, rusqlite::Error> {
-        let guard = self.conn()?;
-        entries::toggle_favorite(guard.as_ref().unwrap(), id)
+        self.in_transaction(|conn| {
+            let favorite = entries::toggle_favorite(conn, id)?;
+            sync_state::queue_upsert_by_id(conn, id)?;
+            Ok(favorite)
+        })
     }
 
     pub fn delete_entry(&self, id: &str) -> Result<(), rusqlite::Error> {
-        let guard = self.conn()?;
-        entries::delete_entry(guard.as_ref().unwrap(), id)
+        self.in_transaction(|conn| {
+            if let Some(entry) = entries::get_entry(conn, id)? {
+                entries::delete_entry(conn, id)?;
+                sync_state::queue_delete(conn, &entry.content_hash, entry.local_only)?;
+            }
+            Ok(())
+        })
     }
 
     pub fn entry_exists_by_hash(&self, hash: &[u8]) -> Result<bool, rusqlite::Error> {
@@ -131,13 +164,20 @@ impl Database {
     }
 
     pub fn touch_entry(&self, id: &str) -> Result<(), rusqlite::Error> {
-        let guard = self.conn()?;
-        entries::touch_entry(guard.as_ref().unwrap(), id)
+        self.in_transaction(|conn| {
+            entries::touch_entry(conn, id)?;
+            sync_state::queue_upsert_by_id(conn, id)
+        })
     }
 
     pub fn touch_entry_by_hash(&self, hash: &[u8]) -> Result<bool, rusqlite::Error> {
-        let guard = self.conn()?;
-        entries::touch_entry_by_hash(guard.as_ref().unwrap(), hash)
+        self.in_transaction(|conn| {
+            let touched = entries::touch_entry_by_hash(conn, hash)?;
+            if touched {
+                sync_state::queue_upsert(conn, hash)?;
+            }
+            Ok(touched)
+        })
     }
 
     pub fn get_all_entries(&self) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
@@ -145,49 +185,18 @@ impl Database {
         entries::get_all_entries(guard.as_ref().unwrap())
     }
 
+    /// Deletes every entry and queues a delete for each synced one.
     pub fn wipe_all(&self) -> Result<(), rusqlite::Error> {
-        let guard = self.conn()?;
-        guard
-            .as_ref()
-            .unwrap()
-            .execute_batch("DELETE FROM entries;")?;
-        Ok(())
+        self.in_transaction(|conn| {
+            for entry in entries::get_all_entries(conn)? {
+                sync_state::queue_delete(conn, &entry.content_hash, entry.local_only)?;
+            }
+            conn.execute_batch("DELETE FROM entries;")
+        })
     }
 
-    /// Produce a consistent, encrypted snapshot of the live DB at `dst_path` using the SQLite
-    /// online backup API. The destination is keyed with `key` (same SQLCipher key), so the
-    /// resulting file is a self-contained encrypted `cmdv.db`. Returns the snapshot byte size.
-    ///
-    /// The backup API copies committed pages, sidestepping WAL/checkpoint concerns.
-    pub fn backup_to_encrypted(&self, dst_path: &Path, key: &[u8; 32]) -> Result<u64, String> {
-        use zeroize::Zeroize;
-
-        // Overwrite any stale snapshot so backup starts from an empty destination.
-        let _ = std::fs::remove_file(dst_path);
-
-        let guard = self.conn().map_err(|e| e.to_string())?;
-        let src = guard.as_ref().unwrap();
-
-        let mut dst = Connection::open(dst_path).map_err(|e| e.to_string())?;
-        let mut hex_key = hex::encode(key);
-        let mut pragma = format!("PRAGMA key = \"x'{}'\";", hex_key);
-        hex_key.zeroize();
-        let key_result = dst.execute_batch(&pragma);
-        pragma.zeroize();
-        key_result.map_err(|e| format!("Failed to key snapshot: {}", e))?;
-
-        {
-            let backup =
-                rusqlite::backup::Backup::new(src, &mut dst).map_err(|e| e.to_string())?;
-            backup
-                .run_to_completion(100, std::time::Duration::from_millis(0), None)
-                .map_err(|e| format!("Backup failed: {}", e))?;
-        }
-
-        dst.close().map_err(|(_, e)| e.to_string())?;
-
-        std::fs::metadata(dst_path)
-            .map(|m| m.len())
-            .map_err(|e| e.to_string())
+    /// Forgets the synced account: its key, position, outbox and recent deletes.
+    pub fn clear_sync_state(&self) -> Result<(), rusqlite::Error> {
+        self.with_conn(sync_state::clear)
     }
 }

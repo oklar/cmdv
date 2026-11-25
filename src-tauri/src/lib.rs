@@ -393,6 +393,7 @@ pub fn run() {
             commands::vault::export_database,
             commands::vault::import_database,
             commands::sync::sync_now,
+            commands::sync::sync_on_window_open,
             commands::sync::get_sync_status,
         ])
         .run(tauri::generate_context!())

@@ -99,6 +99,7 @@ impl ClipboardMonitor {
                 .map_err(|e| e.to_string())?
             {
                 self.last_text_hash = Some(content_hash);
+                crate::commands::sync::trigger_sync();
                 text.zeroize();
                 return Ok(None);
             }
@@ -137,6 +138,7 @@ impl ClipboardMonitor {
                 .map_err(|e| e.to_string())?
             {
                 self.last_image_hash = Some(content_hash);
+                crate::commands::sync::trigger_sync();
                 return Ok(None);
             }
 

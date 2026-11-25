@@ -248,6 +248,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     });
 
     log::info!("Clipboard monitoring started");
+    crate::commands::sync::request_fetch();
 }
 
 /// Returns None if the user cancels the save dialog.
@@ -348,11 +349,8 @@ pub async fn import_database(
             .to_string()
     })?;
 
-    let local_entries = db.get_all_entries().map_err(|e| e.to_string())?;
-    let merged = crate::sync::conflict::merge_entries(&local_entries, &blob.entries);
-
     let mut imported = 0;
-    for entry in &merged {
+    for entry in &blob.entries {
         if !db
             .entry_exists_by_hash(&entry.content_hash)
             .map_err(|e| e.to_string())?

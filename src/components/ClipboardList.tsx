@@ -68,6 +68,7 @@ export function ClipboardList({
 
   useEffect(() => {
     const onFocus = async () => {
+      invoke("sync_on_window_open").catch(() => {});
       await invoke("force_clipboard_poll");
       fetchEntries();
       if (didCopyRef.current) {

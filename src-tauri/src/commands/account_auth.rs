@@ -100,7 +100,7 @@ struct TokenResponse {
 static HTTP: OnceLock<Client> = OnceLock::new();
 
 /// Shared reqwest client (accepts the ASP.NET dev cert in debug builds). `pub(crate)` so the sync
-/// data-plane calls to the Worker can reuse the same pooled client.
+/// client reuses the same pooled client.
 pub(crate) fn http() -> &'static Client {
     HTTP.get_or_init(|| {
         let mut builder = Client::builder().timeout(Duration::from_secs(30));
@@ -284,17 +284,24 @@ pub async fn fetch_account(app: AppHandle) -> Result<AccountInfo, String> {
 pub fn desktop_logout(app: AppHandle) -> Result<(), String> {
     KeychainStore::new().delete_account_session()?;
     app.state::<AuthState>().clear();
+    // The next login may be another account, which has its own key and history.
+    if let Err(e) = app
+        .state::<std::sync::Arc<crate::db::Database>>()
+        .clear_sync_state()
+    {
+        log::warn!("Failed to clear sync state on logout: {e}");
+    }
     Ok(())
 }
 
-async fn ensure_access_token(app: &AppHandle) -> Result<String, String> {
+pub(crate) async fn ensure_access_token(app: &AppHandle) -> Result<String, String> {
     if let Some(token) = app.state::<AuthState>().valid_access_token() {
         return Ok(token);
     }
     refresh_session(app).await
 }
 
-async fn refresh_session(app: &AppHandle) -> Result<String, String> {
+pub(crate) async fn refresh_session(app: &AppHandle) -> Result<String, String> {
     let store = KeychainStore::new();
     let mut refresh = store
         .load_account_refresh_token()?
@@ -328,70 +335,6 @@ async fn refresh_session(app: &AppHandle) -> Result<String, String> {
     body.access_token.zeroize();
     body.refresh_token.zeroize();
     Ok(token)
-}
-
-/// Authenticated GET against the .NET API with the account access token, auto-refreshing once
-/// on a 401. Used by the sync control-plane calls (not the Worker data-plane calls, which carry
-/// their own capability token).
-pub(crate) async fn authed_get(app: &AppHandle, url: &str) -> Result<reqwest::Response, String> {
-    let mut token = ensure_access_token(app).await?;
-    let res = http()
-        .get(url)
-        .bearer_auth(&token)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {e}"));
-
-    if let Ok(r) = &res {
-        if r.status() == reqwest::StatusCode::UNAUTHORIZED {
-            token.zeroize();
-            token = refresh_session(app).await?;
-            let retry = http()
-                .get(url)
-                .bearer_auth(&token)
-                .send()
-                .await
-                .map_err(|e| format!("Network error: {e}"));
-            token.zeroize();
-            return retry;
-        }
-    }
-    token.zeroize();
-    res
-}
-
-/// Authenticated POST (JSON body) with the same auto-refresh-once behaviour as `authed_get`.
-pub(crate) async fn authed_post_json<T: Serialize + ?Sized>(
-    app: &AppHandle,
-    url: &str,
-    body: &T,
-) -> Result<reqwest::Response, String> {
-    let mut token = ensure_access_token(app).await?;
-    let res = http()
-        .post(url)
-        .bearer_auth(&token)
-        .json(body)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {e}"));
-
-    if let Ok(r) = &res {
-        if r.status() == reqwest::StatusCode::UNAUTHORIZED {
-            token.zeroize();
-            token = refresh_session(app).await?;
-            let retry = http()
-                .post(url)
-                .bearer_auth(&token)
-                .json(body)
-                .send()
-                .await
-                .map_err(|e| format!("Network error: {e}"));
-            token.zeroize();
-            return retry;
-        }
-    }
-    token.zeroize();
-    res
 }
 
 async fn get_me_ok(access_token: &str) -> Result<bool, String> {

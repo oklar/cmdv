@@ -272,7 +272,7 @@ function CloudSyncSection() {
     <section>
       <h2 className="section-label">Cloud Sync</h2>
       <div className="group-card">
-        <SettingRow label="Automatic backup" description={description}>
+        <SettingRow label="Sync between devices" description={description}>
           <button
             onClick={handleSyncNow}
             disabled={!loggedIn || syncing}

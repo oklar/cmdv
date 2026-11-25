@@ -29,6 +29,14 @@ impl ItemKind {
             ItemKind::Delete => "delete",
         }
     }
+
+    pub fn parse(kind: &str) -> Option<Self> {
+        match kind {
+            "entry" => Some(ItemKind::Entry),
+            "delete" => Some(ItemKind::Delete),
+            _ => None,
+        }
+    }
 }
 
 /// What an entry item carries. `content_hash` travels with it because an image's hash is taken
