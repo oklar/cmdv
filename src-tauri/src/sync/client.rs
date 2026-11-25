@@ -132,10 +132,10 @@ impl SyncClient {
     }
 
     /// Stores the account's first key bundle. If another device stored one first, returns that.
-    pub async fn put_key(&self, sealed: &[u8]) -> Result<KeyState, ApiError> {
+    pub async fn create_key(&self, sealed: &[u8]) -> Result<KeyState, ApiError> {
         let url = format!("{}/sync/key", self.base_url);
         let body = serde_json::json!({ "bundle": STANDARD.encode(sealed) });
-        let res = self.send(|http| http.put(&url).json(&body)).await?;
+        let res = self.send(|http| http.post(&url).json(&body)).await?;
         if res.status() == StatusCode::CONFLICT {
             return key_state(res).await;
         }

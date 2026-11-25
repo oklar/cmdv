@@ -355,7 +355,7 @@ impl SyncEngine {
                     .seal(master)
                     .map_err(SyncError::Local)?,
             };
-            server = self.client.put_key(&sealed).await?;
+            server = self.client.create_key(&sealed).await?;
         }
 
         let sealed = server
