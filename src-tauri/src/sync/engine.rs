@@ -9,9 +9,9 @@ use std::sync::Arc;
 use crate::crypto::keys::MasterKey;
 use crate::crypto::sync_keys::{ItemKeys, KeyBundle};
 use crate::db::sync_state::{
-    self, META_GENERATION_ID, META_KEY_BUNDLE, META_KEY_VERSION, META_LAST_SEQ,
+    self, META_GENERATION_ID, META_HASH_KEY, META_KEY_BUNDLE, META_KEY_VERSION, META_LAST_SEQ,
 };
-use crate::db::Database;
+use crate::db::{ClipboardEntry, Database};
 use crate::sync::client::{
     ApiError, KeyState, SyncClient, DAILY_QUOTA_TYPE, PINNED_LIMIT_TYPE, STALE_KEY_VERSION_TYPE,
 };
@@ -43,12 +43,20 @@ pub struct SyncReport {
     /// The server was restored or started over, so this device sent its recent deletes again
     /// and fetched from the start.
     pub restored: bool,
+    /// The account's hash key, when it differs from the one this device used, as on a device
+    /// set up with a phrase from after a rotation. Text entries were hashed again with it.
+    pub new_hash_key: Option<[u8; 32]>,
 }
 
 #[derive(Debug)]
 pub enum SyncError {
     NotEntitled,
+    NotSetUp,
     DifferentPhrase,
+    /// Another device changed the recovery phrase. This one needs the new phrase to sync.
+    KeyVersionBehind,
+    /// A phrase entered on this device doesn't open the account's key.
+    WrongPhrase,
     KeyChanged,
     QuotaReached,
     RateLimited,
@@ -63,8 +71,18 @@ impl fmt::Display for SyncError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SyncError::NotEntitled => write!(f, "Cloud sync is a paid feature."),
+            SyncError::NotSetUp => {
+                write!(f, "Sync this device once before changing the recovery phrase.")
+            }
             SyncError::DifferentPhrase => {
                 write!(f, "This account syncs with a different recovery phrase.")
+            }
+            SyncError::KeyVersionBehind => write!(
+                f,
+                "The recovery phrase was changed on another device. Enter the new phrase to keep syncing."
+            ),
+            SyncError::WrongPhrase => {
+                write!(f, "That phrase doesn't open this account's sync key.")
             }
             SyncError::KeyChanged => {
                 write!(f, "The account's sync key changed on another device.")
@@ -116,6 +134,32 @@ impl From<ApiError> for SyncError {
     }
 }
 
+/// A phrase rotation the server has committed. `finish_rotation` records it on this device.
+pub struct Rotation {
+    sealed: Vec<u8>,
+    key: KeyState,
+    outbox_mark: i64,
+}
+
+/// The account's key, opened with a phrase entered on this device.
+pub struct PhraseCheck {
+    sealed: Vec<u8>,
+    key_version: u32,
+    hash_key: [u8; 32],
+}
+
+impl PhraseCheck {
+    pub fn hash_key(&self) -> &[u8; 32] {
+        &self.hash_key
+    }
+}
+
+impl Drop for PhraseCheck {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.hash_key);
+    }
+}
+
 pub struct SyncEngine {
     db: Arc<Database>,
     client: SyncClient,
@@ -126,9 +170,111 @@ impl SyncEngine {
         Self { db, client }
     }
 
+    /// Uploads every synced entry, and the deletes from the last 30 days, encrypted under a new
+    /// phrase and the next key version, and makes them the account's items on the server.
+    /// Other devices then need the new phrase. The caller moves this device to the new phrase,
+    /// then calls `finish_rotation`.
+    pub async fn rotate(
+        &self,
+        new_master: &MasterKey,
+        hash_key: [u8; 32],
+    ) -> Result<Rotation, SyncError> {
+        let current = self.client.get_key().await?;
+        let cached_version: Option<u32> = self
+            .db
+            .with_conn(|c| sync_state::meta(c, META_KEY_VERSION))?;
+        match cached_version {
+            None => return Err(SyncError::NotSetUp),
+            Some(version) if version != current.key_version => {
+                return Err(SyncError::KeyVersionBehind)
+            }
+            Some(_) => {}
+        }
+
+        let bundle = KeyBundle::generate(current.key_version + 1, hash_key);
+        let sealed = bundle.seal(new_master).map_err(SyncError::Local)?;
+        let keys = bundle.item_keys();
+        let outbox_mark = self.db.with_conn(sync_state::outbox_last_id)?;
+
+        self.client.start_rotation().await?;
+        let committed = match self.upload_for_rotation(&keys).await {
+            Ok(()) => self
+                .client
+                .commit_rotation(&sealed)
+                .await
+                .map_err(SyncError::from),
+            Err(e) => Err(e),
+        };
+        match committed {
+            Ok(key) => Ok(Rotation {
+                sealed,
+                key,
+                outbox_mark,
+            }),
+            Err(e) => {
+                let _ = self.client.abort_rotation().await;
+                Err(e)
+            }
+        }
+    }
+
+    /// Records a committed rotation, once this device uses the new phrase. Changes queued
+    /// before the rotation started were part of it.
+    pub fn finish_rotation(
+        &self,
+        rotation: &Rotation,
+        hash_key: &[u8; 32],
+    ) -> Result<(), SyncError> {
+        self.db.with_conn(|c| {
+            sync_state::set_meta(c, META_KEY_BUNDLE, &rotation.sealed)?;
+            sync_state::set_meta(c, META_KEY_VERSION, rotation.key.key_version)?;
+            sync_state::set_meta(c, META_GENERATION_ID, rotation.key.generation_id.as_str())?;
+            sync_state::set_meta(c, META_LAST_SEQ, rotation.key.latest_seq)?;
+            sync_state::set_meta(c, META_HASH_KEY, hash_key.as_slice())?;
+            sync_state::clear_sync_ids(c)?;
+            sync_state::remove_outbox_through(c, rotation.outbox_mark)
+        })?;
+        Ok(())
+    }
+
+    /// Opens the account's key with a phrase entered on this device, after another device
+    /// changed it. Nothing changes here until `adopt_phrase`.
+    pub async fn open_with_phrase(&self, master: &MasterKey) -> Result<PhraseCheck, SyncError> {
+        let server = self.client.get_key().await?;
+        let sealed = server
+            .bundle
+            .ok_or_else(|| SyncError::Server("no sync key".into()))?;
+        let bundle = KeyBundle::open(master, &sealed).map_err(|_| SyncError::WrongPhrase)?;
+        Ok(PhraseCheck {
+            sealed,
+            key_version: server.key_version,
+            hash_key: *bundle.hash_key(),
+        })
+    }
+
+    /// Records the key opened with a new phrase, once this device uses that phrase. The next
+    /// run finds the new generation id and does the restore steps.
+    pub fn adopt_phrase(
+        &self,
+        check: &PhraseCheck,
+        previous_hash_key: &[u8; 32],
+    ) -> Result<(), SyncError> {
+        self.db.with_conn(|c| {
+            sync_state::set_meta(c, META_KEY_BUNDLE, &check.sealed)?;
+            sync_state::set_meta(c, META_KEY_VERSION, check.key_version)?;
+            sync_state::set_meta(c, META_HASH_KEY, check.hash_key.as_slice())?;
+            sync_state::clear_sync_ids(c)?;
+            if previous_hash_key != &check.hash_key {
+                sync_state::rehash_text_entries(c, &check.hash_key)?;
+            }
+            Ok(())
+        })?;
+        Ok(())
+    }
+
     pub async fn run(&self, master: &MasterKey, mode: SyncMode) -> Result<SyncReport, SyncError> {
         let mut report = SyncReport::default();
-        let (keys, server) = self.ensure_key(master).await?;
+        let (keys, server) = self.ensure_key(master, &mut report).await?;
 
         let stored_generation: Option<String> = self
             .db
@@ -191,7 +337,11 @@ impl SyncEngine {
     }
 
     /// Opens the account's key bundle, storing a new one if the account has none yet.
-    async fn ensure_key(&self, master: &MasterKey) -> Result<(ItemKeys, KeyState), SyncError> {
+    async fn ensure_key(
+        &self,
+        master: &MasterKey,
+        report: &mut SyncReport,
+    ) -> Result<(ItemKeys, KeyState), SyncError> {
         let mut server = self.client.get_key().await?;
         if server.bundle.is_none() {
             // A device that synced before offers the bundle it has, so a server that lost the
@@ -212,16 +362,90 @@ impl SyncEngine {
             .bundle
             .clone()
             .ok_or_else(|| SyncError::Server("no sync key".into()))?;
-        let bundle = KeyBundle::open(master, &sealed).map_err(|_| SyncError::DifferentPhrase)?;
+        let cached_version: Option<u32> = self
+            .db
+            .with_conn(|c| sync_state::meta(c, META_KEY_VERSION))?;
+        let bundle = match KeyBundle::open(master, &sealed) {
+            Ok(bundle) => bundle,
+            Err(_) if cached_version.is_some_and(|v| server.key_version > v) => {
+                return Err(SyncError::KeyVersionBehind)
+            }
+            Err(_) => return Err(SyncError::DifferentPhrase),
+        };
         if bundle.version() != server.key_version {
             return Err(SyncError::KeyChanged);
         }
 
+        let current_hash_key = match self.db.stored_hash_key()? {
+            Some(stored) => stored,
+            None => master.derive_hash_key(),
+        };
+        let hash_key_changed = bundle.hash_key() != &current_hash_key;
         self.db.with_conn(|c| {
             sync_state::set_meta(c, META_KEY_BUNDLE, &sealed)?;
-            sync_state::set_meta(c, META_KEY_VERSION, server.key_version)
+            sync_state::set_meta(c, META_KEY_VERSION, server.key_version)?;
+            sync_state::set_meta(c, META_HASH_KEY, bundle.hash_key().as_slice())?;
+            // Item ids come from the key, so a new key version means new ids.
+            if cached_version != Some(server.key_version) {
+                sync_state::clear_sync_ids(c)?;
+            }
+            if hash_key_changed {
+                sync_state::rehash_text_entries(c, bundle.hash_key())?;
+            }
+            Ok(())
         })?;
+        if hash_key_changed {
+            report.new_hash_key = Some(*bundle.hash_key());
+        }
         Ok((bundle.item_keys(), server))
+    }
+
+    /// Uploads to the rotation's staging area: every synced entry, oldest first, then deletes
+    /// from the last 30 days of content that isn't here any more.
+    async fn upload_for_rotation(&self, keys: &ItemKeys) -> Result<(), SyncError> {
+        let (entries, deletes) = self.db.with_conn(|c| {
+            Ok((
+                sync_state::syncable_entry_hashes(c)?,
+                sync_state::recent_delete_hashes(c)?,
+            ))
+        })?;
+
+        let mut batch: Vec<SyncItem> = Vec::new();
+        let mut body_bytes = 0;
+        let rows = entries
+            .into_iter()
+            .map(|hash| (hash, false))
+            .chain(deletes.into_iter().map(|hash| (hash, true)));
+        for (hash, is_delete) in rows {
+            let item = if is_delete {
+                item::encrypt_delete(keys, &hash)
+            } else {
+                match self
+                    .db
+                    .with_conn(|c| sync_state::entry_for_upload(c, &hash))?
+                {
+                    Some(entry) => item::encrypt_entry(keys, &payload(entry)),
+                    None => continue,
+                }
+            }
+            .map_err(SyncError::Local)?;
+            if item.ciphertext.len() > MAX_ITEM_BYTES {
+                continue;
+            }
+
+            let item_bytes = wire_bytes(&item);
+            if !batch.is_empty() && body_bytes + item_bytes > MAX_BODY_BYTES {
+                self.client.post_rotation_items(&batch).await?;
+                batch.clear();
+                body_bytes = 0;
+            }
+            body_bytes += item_bytes;
+            batch.push(item);
+        }
+        if !batch.is_empty() {
+            self.client.post_rotation_items(&batch).await?;
+        }
+        Ok(())
     }
 
     /// Uploads the outbox in order. With `advance`, moves `last_seq` past this device's own
@@ -255,16 +479,7 @@ impl SyncEngine {
                         .db
                         .with_conn(|c| sync_state::entry_for_upload(c, &row.content_hash))?
                     {
-                        Some(entry) => item::encrypt_entry(
-                            keys,
-                            &EntryPayload {
-                                content_type: entry.content_type,
-                                content: entry.content,
-                                content_hash: entry.content_hash,
-                                is_favorite: entry.is_favorite,
-                                last_used_at: entry.last_used_at,
-                            },
-                        ),
+                        Some(entry) => item::encrypt_entry(keys, &payload(entry)),
                         None => {
                             dropped.push(row.id);
                             continue;
@@ -278,7 +493,7 @@ impl SyncEngine {
                     dropped.push(row.id);
                     continue;
                 }
-                let item_bytes = item.ciphertext.len().div_ceil(3) * 4 + 256;
+                let item_bytes = wire_bytes(&item);
                 if !batch.is_empty() && body_bytes + item_bytes > MAX_BODY_BYTES {
                     break;
                 }
@@ -386,4 +601,19 @@ impl SyncEngine {
             }
         }
     }
+}
+
+fn payload(entry: ClipboardEntry) -> EntryPayload {
+    EntryPayload {
+        content_type: entry.content_type,
+        content: entry.content,
+        content_hash: entry.content_hash,
+        is_favorite: entry.is_favorite,
+        last_used_at: entry.last_used_at,
+    }
+}
+
+/// An item's size in the request body: base64 ciphertext plus room for its other fields.
+fn wire_bytes(item: &SyncItem) -> usize {
+    item.ciphertext.len().div_ceil(3) * 4 + 256
 }

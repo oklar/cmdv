@@ -143,7 +143,36 @@ impl SyncClient {
     }
 
     pub async fn post_items(&self, items: &[SyncItem]) -> Result<SavedItems, ApiError> {
-        let url = format!("{}/sync/items", self.base_url);
+        self.post_items_to("/sync/items", items).await
+    }
+
+    /// Starts a phrase rotation on the server and returns the current key.
+    pub async fn start_rotation(&self) -> Result<KeyState, ApiError> {
+        let url = format!("{}/sync/rotation", self.base_url);
+        let res = self.send(|http| http.post(&url)).await?;
+        key_state(expect_success(res).await?).await
+    }
+
+    pub async fn post_rotation_items(&self, items: &[SyncItem]) -> Result<SavedItems, ApiError> {
+        self.post_items_to("/sync/rotation/items", items).await
+    }
+
+    /// Stores the new bundle and makes the rotation's items the account's. Returns the new key.
+    pub async fn commit_rotation(&self, sealed: &[u8]) -> Result<KeyState, ApiError> {
+        let url = format!("{}/sync/rotation/commit", self.base_url);
+        let body = serde_json::json!({ "bundle": STANDARD.encode(sealed) });
+        let res = self.send(|http| http.post(&url).json(&body)).await?;
+        key_state(expect_success(res).await?).await
+    }
+
+    pub async fn abort_rotation(&self) -> Result<(), ApiError> {
+        let url = format!("{}/sync/rotation", self.base_url);
+        let res = self.send(|http| http.delete(&url)).await?;
+        expect_success(res).await.map(|_| ())
+    }
+
+    async fn post_items_to(&self, path: &str, items: &[SyncItem]) -> Result<SavedItems, ApiError> {
+        let url = format!("{}{path}", self.base_url);
         let items: Vec<ItemBody> = items
             .iter()
             .map(|item| ItemBody {

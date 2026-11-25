@@ -4,13 +4,16 @@ pub mod settings;
 pub mod sync_state;
 
 use rusqlite::Connection;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use zeroize::Zeroize;
 
 pub use entries::{ClipboardEntry, EntryFilter, EntryType, NewEntry};
 
 pub struct Database {
     conn: Mutex<Option<Connection>>,
+    /// The file behind `conn`, so a failed key attempt can start over on a fresh connection.
+    path: Option<PathBuf>,
 }
 
 impl Database {
@@ -31,23 +34,64 @@ impl Database {
         let conn = Connection::open(path)?;
         Ok(Self {
             conn: Mutex::new(Some(conn)),
+            path: Some(path.to_path_buf()),
         })
     }
 
     /// Apply the SQLCipher encryption key and initialize the schema.
-    /// Must be called exactly once after vault unlock.
+    /// Call once after vault unlock. If the key doesn't open the file, the connection is
+    /// replaced, so another key can be tried.
     pub fn set_encryption_key(&self, key: &[u8; 32]) -> Result<(), String> {
-        use zeroize::Zeroize;
-        let guard = self.conn().map_err(|e| e.to_string())?;
-        let conn = guard.as_ref().unwrap();
+        let mut guard = self.conn().map_err(|e| e.to_string())?;
+        let result = Self::apply_key(guard.as_ref().unwrap(), key);
+        if result.is_err() {
+            if let Some(path) = &self.path {
+                *guard = Some(Connection::open(path).map_err(|e| e.to_string())?);
+            }
+        }
+        result
+    }
+
+    fn apply_key(conn: &Connection, key: &[u8; 32]) -> Result<(), String> {
         let mut hex_key = hex::encode(key);
         let mut pragma = format!("PRAGMA key = \"x'{}'\";", hex_key);
         hex_key.zeroize();
-        conn.execute_batch(&pragma)
-            .map_err(|e| format!("Failed to set DB encryption key: {}", e))?;
+        let keyed = conn.execute_batch(&pragma);
         pragma.zeroize();
-        schema::initialize(conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;
-        Ok(())
+        keyed.map_err(|e| format!("Failed to set DB encryption key: {}", e))?;
+        schema::initialize(conn).map_err(|e| format!("Failed to initialize schema: {}", e))
+    }
+
+    /// Re-encrypts the open database under `key`, for a new recovery phrase.
+    pub fn rekey(&self, key: &[u8; 32]) -> Result<(), String> {
+        let guard = self.conn().map_err(|e| e.to_string())?;
+        let conn = guard.as_ref().unwrap();
+        // SQLCipher can't rekey a database in WAL mode.
+        conn.execute_batch("PRAGMA journal_mode=DELETE;")
+            .map_err(|e| e.to_string())?;
+        let mut hex_key = hex::encode(key);
+        let mut pragma = format!("PRAGMA rekey = \"x'{}'\";", hex_key);
+        hex_key.zeroize();
+        let rekeyed = conn.execute_batch(&pragma);
+        pragma.zeroize();
+        rekeyed.map_err(|e| format!("Failed to re-encrypt the database: {}", e))?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn store_hash_key(&self, hash_key: &[u8; 32]) -> Result<(), rusqlite::Error> {
+        self.with_conn(|c| sync_state::set_meta(c, sync_state::META_HASH_KEY, hash_key.as_slice()))
+    }
+
+    /// The hash key kept after a phrase rotation. Without one, the phrase's own is used.
+    pub fn stored_hash_key(&self) -> Result<Option<[u8; 32]>, rusqlite::Error> {
+        let stored: Option<Vec<u8>> =
+            self.with_conn(|c| sync_state::meta(c, sync_state::META_HASH_KEY))?;
+        Ok(stored.and_then(|mut bytes| {
+            let key = <[u8; 32]>::try_from(bytes.as_slice()).ok();
+            bytes.zeroize();
+            key
+        }))
     }
 
     /// Open an unencrypted in-memory database with immediate schema init (for tests).
@@ -56,6 +100,7 @@ impl Database {
         schema::initialize(&conn)?;
         Ok(Self {
             conn: Mutex::new(Some(conn)),
+            path: None,
         })
     }
 
@@ -198,5 +243,49 @@ impl Database {
     /// Forgets the synced account: its key, position, outbox and recent deletes.
     pub fn clear_sync_state(&self) -> Result<(), rusqlite::Error> {
         self.with_conn(sync_state::clear)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_db_path() -> PathBuf {
+        std::env::temp_dir().join(format!("cmdv-rekey-test-{}.db", uuid::Uuid::new_v4()))
+    }
+
+    fn remove(path: &Path) {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+    }
+
+    #[test]
+    fn rekeyed_file_opens_with_the_new_key_only() {
+        let path = temp_db_path();
+        let (old_key, new_key) = ([1u8; 32], [2u8; 32]);
+
+        let db = Database::open_encrypted(&path).unwrap();
+        db.set_encryption_key(&old_key).unwrap();
+        db.insert_entry(&NewEntry {
+            content: b"kept".to_vec(),
+            content_type: EntryType::Text,
+            content_hash: vec![1],
+            size_bytes: 4,
+            is_favorite: false,
+            local_only: false,
+        })
+        .unwrap();
+        db.rekey(&new_key).unwrap();
+        db.close();
+
+        let with_old = Database::open_encrypted(&path).unwrap();
+        assert!(with_old.set_encryption_key(&old_key).is_err());
+        // The failed attempt left a fresh connection, so the right key still works on it.
+        with_old.set_encryption_key(&new_key).unwrap();
+        assert_eq!(with_old.get_all_entries().unwrap()[0].content, b"kept");
+        with_old.close();
+
+        remove(&path);
     }
 }

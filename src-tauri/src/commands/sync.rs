@@ -34,7 +34,11 @@ pub struct SyncScheduler {
     fetch_requested: AtomicBool,
     running: AtomicBool,
     entitled: AtomicU8,
+    /// Another device changed the recovery phrase; uploads wait until the new one is entered.
+    needs_new_phrase: AtomicBool,
     last_error: Mutex<Option<String>>,
+    /// Held by a sync run and by a phrase change, so they never overlap.
+    exclusive: tokio::sync::Mutex<()>,
 }
 
 impl SyncScheduler {
@@ -44,7 +48,9 @@ impl SyncScheduler {
             fetch_requested: AtomicBool::new(false),
             running: AtomicBool::new(false),
             entitled: AtomicU8::new(ENT_UNKNOWN),
+            needs_new_phrase: AtomicBool::new(false),
             last_error: Mutex::new(None),
+            exclusive: tokio::sync::Mutex::new(()),
         }
     }
 }
@@ -62,6 +68,8 @@ pub struct SyncStatusView {
     pub syncing: bool,
     pub last_synced_at: Option<String>,
     pub last_error: Option<String>,
+    /// Another device changed the recovery phrase; this one needs the new phrase to sync.
+    pub needs_new_phrase: bool,
 }
 
 /// Uploads this device's changes after a short pause, so a burst goes in one request.
@@ -107,7 +115,10 @@ pub fn spawn_scheduler(app: AppHandle, scheduler: Arc<SyncScheduler>) {
             } else {
                 SyncMode::Upload
             };
-            if mode == SyncMode::Upload && scheduler.entitled.load(Ordering::SeqCst) == ENT_NO {
+            if mode == SyncMode::Upload
+                && (scheduler.entitled.load(Ordering::SeqCst) == ENT_NO
+                    || scheduler.needs_new_phrase.load(Ordering::SeqCst))
+            {
                 continue;
             }
             run_sync(&app, &scheduler, mode).await;
@@ -153,6 +164,7 @@ async fn run_sync(app: &AppHandle, scheduler: &SyncScheduler, mode: SyncMode) {
         return;
     }
 
+    let _exclusive = scheduler.exclusive.lock().await;
     scheduler.running.store(true, Ordering::SeqCst);
     emit(app, scheduler, true);
 
@@ -168,6 +180,10 @@ async fn run_sync(app: &AppHandle, scheduler: &SyncScheduler, mode: SyncMode) {
     let error = match result {
         Ok(report) => {
             scheduler.entitled.store(ENT_YES, Ordering::SeqCst);
+            scheduler.needs_new_phrase.store(false, Ordering::SeqCst);
+            if let Some(hash_key) = &report.new_hash_key {
+                use_hash_key(app, hash_key);
+            }
             if report.applied > 0 {
                 let max_total = app
                     .state::<Arc<SettingsDb>>()
@@ -181,19 +197,152 @@ async fn run_sync(app: &AppHandle, scheduler: &SyncScheduler, mode: SyncMode) {
                 .then(|| PINNED_LIMIT_MESSAGE.to_string())
         }
         Err(e) => {
-            if matches!(e, SyncError::NotEntitled) {
-                scheduler.entitled.store(ENT_NO, Ordering::SeqCst);
+            match e {
+                SyncError::NotEntitled => scheduler.entitled.store(ENT_NO, Ordering::SeqCst),
+                SyncError::KeyVersionBehind => {
+                    scheduler.needs_new_phrase.store(true, Ordering::SeqCst)
+                }
+                _ => {}
             }
             log::warn!("Sync failed: {e}");
             Some(e.to_string())
         }
     };
-    if let Ok(mut last_error) = scheduler.last_error.lock() {
-        *last_error = error;
-    }
+    set_error(scheduler, error);
 
     scheduler.running.store(false, Ordering::SeqCst);
     emit(app, scheduler, false);
+}
+
+/// Finishes a phrase change started with `begin_phrase_change`, once the user has saved the
+/// new phrase. The server gets every entry again under the new phrase first. Then this device
+/// moves to it. If the app stops in between, this device asks for the saved phrase like the
+/// others do.
+#[tauri::command]
+pub async fn finish_phrase_change(app: AppHandle) -> Result<(), String> {
+    let scheduler = app.state::<Arc<SyncScheduler>>().inner().clone();
+    let vault = app.state::<Arc<VaultState>>().inner().clone();
+    let _exclusive = scheduler.exclusive.lock().await;
+
+    let new_master = vault
+        .pending_phrase
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .as_ref()
+        .map(|master| MasterKey::from_bytes(*master.as_bytes()))
+        .ok_or("No phrase change was started.")?;
+    let mut hash_key = current_hash_key(&vault)?;
+
+    let engine = engine(&app);
+    let result = async {
+        let rotation = engine
+            .rotate(&new_master, hash_key)
+            .await
+            .map_err(|e| e.to_string())?;
+        switch_phrase(&app, &new_master, &hash_key)?;
+        engine
+            .finish_rotation(&rotation, &hash_key)
+            .map_err(|e| e.to_string())
+    }
+    .await;
+    hash_key.zeroize();
+    result?;
+
+    *vault.pending_phrase.lock().map_err(|_| "Lock poisoned")? = None;
+    scheduler.needs_new_phrase.store(false, Ordering::SeqCst);
+    set_error(&scheduler, None);
+    emit(&app, &scheduler, false);
+    // Changes made while the phrase changed are still queued.
+    trigger_sync();
+    Ok(())
+}
+
+/// Moves this device to a phrase changed on another device: checks it opens the account's
+/// key, then re-encrypts the database under it. The next sync does the restore steps.
+#[tauri::command]
+pub async fn enter_new_phrase(app: AppHandle, mnemonic_words: String) -> Result<(), String> {
+    let new_master = crate::commands::vault::master_from_phrase(&mnemonic_words)?;
+    let scheduler = app.state::<Arc<SyncScheduler>>().inner().clone();
+    let vault = app.state::<Arc<VaultState>>().inner().clone();
+    let _exclusive = scheduler.exclusive.lock().await;
+
+    let engine = engine(&app);
+    let check = engine
+        .open_with_phrase(&new_master)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut previous_hash_key = current_hash_key(&vault)?;
+    let result = switch_phrase(&app, &new_master, check.hash_key()).and_then(|()| {
+        engine
+            .adopt_phrase(&check, &previous_hash_key)
+            .map_err(|e| e.to_string())
+    });
+    let hash_key_changed = &previous_hash_key != check.hash_key();
+    previous_hash_key.zeroize();
+    result?;
+    if hash_key_changed {
+        use_hash_key(&app, check.hash_key());
+    }
+
+    scheduler.needs_new_phrase.store(false, Ordering::SeqCst);
+    set_error(&scheduler, None);
+    emit(&app, &scheduler, false);
+    request_fetch();
+    Ok(())
+}
+
+/// Moves this device to `master`'s phrase: re-encrypts the database under its key, then saves
+/// it in the keychain. The hash key is stored first, since it doesn't depend on the phrase.
+fn switch_phrase(app: &AppHandle, master: &MasterKey, hash_key: &[u8; 32]) -> Result<(), String> {
+    let db = app.state::<Arc<Database>>();
+    db.store_hash_key(hash_key).map_err(|e| e.to_string())?;
+
+    let mut db_key = master.derive_db_key();
+    let switched = db
+        .rekey(&db_key)
+        .and_then(|()| KeychainStore::new().save_seed(master.as_bytes()));
+    if switched.is_ok() {
+        if let Ok(mut keys) = app.state::<Arc<VaultState>>().keys.lock() {
+            if let Some(keys) = keys.as_mut() {
+                keys.db_key = db_key;
+                keys.hash_key = *hash_key;
+            }
+        }
+    }
+    db_key.zeroize();
+    switched
+}
+
+/// Starts hashing new copies with `hash_key`, as the account's other devices do.
+fn use_hash_key(app: &AppHandle, hash_key: &[u8; 32]) {
+    let vault = app.state::<Arc<VaultState>>();
+    if let Ok(mut keys) = vault.keys.lock() {
+        if let Some(keys) = keys.as_mut() {
+            keys.hash_key = *hash_key;
+        }
+    }
+    let db = app.state::<Arc<Database>>().inner().clone();
+    let settings_db = app.state::<Arc<SettingsDb>>().inner().clone();
+    crate::commands::vault::start_monitoring(&vault, &db, &settings_db);
+}
+
+fn current_hash_key(vault: &VaultState) -> Result<[u8; 32], String> {
+    let keys = vault.keys.lock().map_err(|_| "Lock poisoned")?;
+    Ok(keys.as_ref().ok_or("Vault is locked")?.hash_key)
+}
+
+fn engine(app: &AppHandle) -> SyncEngine {
+    let db = app.state::<Arc<Database>>().inner().clone();
+    SyncEngine::new(
+        db,
+        SyncClient::new(api_base_url(), Arc::new(AppTokens(app.clone()))),
+    )
+}
+
+fn set_error(scheduler: &SyncScheduler, error: Option<String>) {
+    if let Ok(mut last_error) = scheduler.last_error.lock() {
+        *last_error = error;
+    }
 }
 
 fn master_key() -> Result<MasterKey, String> {
@@ -253,6 +402,7 @@ fn build_view(app: &AppHandle, scheduler: &SyncScheduler, syncing: bool) -> Sync
         syncing,
         last_synced_at,
         last_error,
+        needs_new_phrase: scheduler.needs_new_phrase.load(Ordering::SeqCst),
     }
 }
 

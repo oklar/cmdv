@@ -13,6 +13,9 @@ pub const META_KEY_BUNDLE: &str = "key_bundle";
 pub const META_KEY_VERSION: &str = "key_version";
 pub const META_GENERATION_ID: &str = "generation_id";
 pub const META_LAST_SEQ: &str = "last_seq";
+/// The hash key from the account's bundle, once it differs from the phrase's own (after a
+/// rotation). Content hashes depend on it, so it outlives a logout.
+pub const META_HASH_KEY: &str = "hash_key";
 
 const SYNC_SET_UP: &str = "EXISTS (SELECT 1 FROM sync_meta WHERE key = 'key_bundle')";
 
@@ -254,6 +257,64 @@ pub fn apply_delete(conn: &Connection, sync_id: &str) -> rusqlite::Result<bool> 
     Ok(!hashes.is_empty())
 }
 
+pub fn outbox_last_id(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("SELECT COALESCE(MAX(id), 0) FROM sync_outbox", [], |row| {
+        row.get(0)
+    })
+}
+
+pub fn remove_outbox_through(conn: &Connection, last_id: i64) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM sync_outbox WHERE id <= ?1", params![last_id])?;
+    Ok(())
+}
+
+/// Content hashes of the entries that sync, oldest first.
+pub fn syncable_entry_hashes(conn: &Connection) -> rusqlite::Result<Vec<Vec<u8>>> {
+    let mut stmt = conn.prepare(
+        "SELECT content_hash FROM entries WHERE local_only = 0
+         GROUP BY content_hash ORDER BY MIN(last_used_at)",
+    )?;
+    let hashes = stmt.query_map([], |row| row.get(0))?.collect();
+    hashes
+}
+
+/// Deletes from the last 30 days of content that isn't here any more.
+pub fn recent_delete_hashes(conn: &Connection) -> rusqlite::Result<Vec<Vec<u8>>> {
+    let mut stmt = conn.prepare(
+        "SELECT content_hash FROM sync_recent_deletes
+         WHERE content_hash NOT IN (SELECT content_hash FROM entries)",
+    )?;
+    let hashes = stmt.query_map([], |row| row.get(0))?.collect();
+    hashes
+}
+
+pub fn clear_sync_ids(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute("UPDATE entries SET sync_id = NULL", [])?;
+    Ok(())
+}
+
+/// Hashes text entries again under the account's hash key. Images keep their hash, since it
+/// was taken over pixels that aren't kept, so an image may show up twice once.
+pub fn rehash_text_entries(conn: &Connection, hash_key: &[u8; 32]) -> rusqlite::Result<()> {
+    let texts: Vec<(String, Vec<u8>)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, content FROM entries WHERE content_type = 'text'")?;
+        let rows = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<_, _>>()?;
+        rows
+    };
+    let mut update =
+        conn.prepare("UPDATE entries SET content_hash = ?2, sync_id = NULL WHERE id = ?1")?;
+    for (id, content) in texts {
+        update.execute(params![
+            id,
+            crate::crypto::hash::keyed_hash(hash_key, &content)
+        ])?;
+    }
+    Ok(())
+}
+
 pub fn prune_recent_deletes(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute(
         "DELETE FROM sync_recent_deletes WHERE deleted_at < datetime('now', '-30 days')",
@@ -262,10 +323,11 @@ pub fn prune_recent_deletes(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Forgets everything about the account this device synced with, for a logout.
+/// Forgets the account this device synced with, for a logout. The hash key stays, since the
+/// entries' content hashes were made with it.
 pub fn clear(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
-        "DELETE FROM sync_meta;
+        "DELETE FROM sync_meta WHERE key <> 'hash_key';
          DELETE FROM sync_outbox;
          DELETE FROM sync_recent_deletes;
          UPDATE entries SET sync_id = NULL;",

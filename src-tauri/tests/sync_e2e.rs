@@ -93,21 +93,58 @@ impl AccessTokenSource for FixedToken {
     }
 }
 
-/// A device: its own database, the account's recovery phrase, and a sync engine.
+/// A device: its own database, the account's recovery phrase, and a sync engine. The hash key
+/// starts as the phrase's own and stays when the phrase changes, as in the app.
 struct Device {
     db: Arc<Database>,
     master: MasterKey,
+    hash_key: [u8; 32],
     engine: SyncEngine,
 }
 
 impl Device {
     fn new(env: &Env, phrase: u8) -> Self {
         let db = Arc::new(Database::open_in_memory().unwrap());
+        let master = MasterKey::from_bytes([phrase; 32]);
         Self {
             engine: SyncEngine::new(db.clone(), env.client()),
-            master: MasterKey::from_bytes([phrase; 32]),
+            hash_key: master.derive_hash_key(),
+            master,
             db,
         }
+    }
+
+    /// Changes the account's phrase and moves this device to it, as Settings does.
+    async fn change_phrase(&mut self, phrase: u8) {
+        let new_master = MasterKey::from_bytes([phrase; 32]);
+        let rotation = self
+            .engine
+            .rotate(&new_master, self.hash_key)
+            .await
+            .unwrap();
+        self.engine
+            .finish_rotation(&rotation, &self.hash_key)
+            .unwrap();
+        self.master = new_master;
+    }
+
+    /// Changes the phrase on the server but stops before this device moves to it, as if the
+    /// app quit right after the server committed.
+    async fn change_phrase_and_stop(&self, phrase: u8) {
+        let new_master = MasterKey::from_bytes([phrase; 32]);
+        self.engine
+            .rotate(&new_master, self.hash_key)
+            .await
+            .unwrap();
+    }
+
+    /// Enters a phrase changed on another device, as the Settings form does.
+    async fn enter_phrase(&mut self, phrase: u8) {
+        let new_master = MasterKey::from_bytes([phrase; 32]);
+        let check = self.engine.open_with_phrase(&new_master).await.unwrap();
+        self.engine.adopt_phrase(&check, &self.hash_key).unwrap();
+        self.hash_key = *check.hash_key();
+        self.master = new_master;
     }
 
     /// Copies like the clipboard monitor does: a re-copy touches the entry, new content is added.
@@ -120,7 +157,7 @@ impl Device {
     }
 
     fn add(&self, content: &[u8], local_only: bool) {
-        let hash = keyed_hash(&self.master.derive_hash_key(), content);
+        let hash = keyed_hash(&self.hash_key, content);
         if !self.db.touch_entry_by_hash(&hash).unwrap() {
             self.db
                 .insert_entry(&NewEntry {
@@ -207,6 +244,68 @@ async fn two_devices_sync() {
 
     // Scenario 8 runs inside scenario 6, through the restore.
     println!("scenario 8 ok: a local-only entry never reaches the server and stays on its device");
+
+    env.reset_server();
+    a_phrase_change_reaches_the_other_device(&env).await;
+    println!(
+        "scenario 9 ok: a phrase change pauses the other device until it enters the new phrase"
+    );
+}
+
+async fn a_phrase_change_reaches_the_other_device(env: &Env) {
+    let mut a = Device::new(env, 1);
+    let mut b = Device::new(env, 1);
+
+    a.copy("before");
+    a.copy("deleted before the change");
+    a.sync().await;
+    b.sync().await;
+    a.delete("deleted before the change");
+    a.sync().await;
+    b.copy("copied on B meanwhile");
+
+    a.change_phrase(3).await;
+    assert!(matches!(
+        b.try_sync().await,
+        Err(SyncError::KeyVersionBehind)
+    ));
+    assert!(matches!(
+        b.engine
+            .open_with_phrase(&MasterKey::from_bytes([9; 32]))
+            .await,
+        Err(SyncError::WrongPhrase)
+    ));
+
+    b.enter_phrase(3).await;
+    assert!(b.sync().await.restored);
+    a.sync().await;
+    assert!(a.has("copied on B meanwhile"));
+    assert!(b.has("before"));
+    assert!(!b.has("deleted before the change"));
+
+    // Every item on the server is under the new key version: server_items decrypts each one
+    // with the new phrase's keys and fails on any other.
+    assert_eq!(env.client().get_key().await.unwrap().key_version, 2);
+    let items = env.server_items(&a.master).await;
+    assert!(items.iter().any(|(_, e)| e
+        .as_ref()
+        .is_some_and(|e| e.content == b"copied on B meanwhile")));
+
+    // If the app stops right after the server commits, the device is simply behind and takes
+    // the phrase the user just saved, like any other device.
+    a.change_phrase_and_stop(4).await;
+    assert!(matches!(
+        a.try_sync().await,
+        Err(SyncError::KeyVersionBehind)
+    ));
+    a.enter_phrase(4).await;
+    a.sync().await;
+    b.enter_phrase(4).await;
+    b.sync().await;
+    assert!(a.has("before") && a.has("copied on B meanwhile"));
+    assert!(b.has("before") && b.has("copied on B meanwhile"));
+    assert_eq!(env.client().get_key().await.unwrap().key_version, 3);
+    env.server_items(&b.master).await;
 }
 
 async fn uploads_arrive_on_the_other_device(env: &Env) {

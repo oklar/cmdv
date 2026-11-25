@@ -120,6 +120,8 @@ pub struct VaultState {
     pub clipboard_skip_hash: Arc<Mutex<Option<Vec<u8>>>>,
     /// True while `run_create_secure_paste` is running (blocks overlapping hotkey fires).
     pub secure_paste_in_flight: Arc<AtomicBool>,
+    /// The new recovery phrase during a phrase change, until the change finishes.
+    pub pending_phrase: Mutex<Option<MasterKey>>,
 }
 
 impl VaultState {
@@ -131,6 +133,7 @@ impl VaultState {
             setup_complete: AtomicBool::new(false),
             clipboard_skip_hash: Arc::new(Mutex::new(None)),
             secure_paste_in_flight: Arc::new(AtomicBool::new(false)),
+            pending_phrase: Mutex::new(None),
         }
     }
 }
