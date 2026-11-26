@@ -29,11 +29,12 @@ uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 
 # Database
-rusqlite = { version = "0.43", features = ["bundled-sqlcipher-vendored-openssl", "vtab", "backup"] }
+rusqlite = { version = "0.43", features = ["bundled-sqlcipher-vendored-openssl", "vtab"] }
 
 # Crypto
 aes-gcm = "0.10"
 hkdf = "0.12"
+hmac = "0.12"
 sha2 = "0.10"
 blake3 = "1"
 rand = "0.8"

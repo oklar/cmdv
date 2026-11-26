@@ -70,6 +70,8 @@ pub struct ClipboardEntry {
     pub last_used_at: String,
     pub is_favorite: bool,
     pub size_bytes: i64,
+    /// The copying app asked that this content never leave the device, so it is never synced.
+    pub local_only: bool,
 }
 
 pub struct NewEntry {
@@ -78,13 +80,14 @@ pub struct NewEntry {
     pub content_hash: Vec<u8>,
     pub size_bytes: i64,
     pub is_favorite: bool,
+    pub local_only: bool,
 }
 
 pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusqlite::Error> {
     let id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO entries (id, content, content_type, content_hash, is_favorite, size_bytes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO entries (id, content, content_type, content_hash, is_favorite, size_bytes, local_only)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             id,
             entry.content,
@@ -92,6 +95,7 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
             entry.content_hash,
             entry.is_favorite as i32,
             entry.size_bytes,
+            entry.local_only,
         ],
     )?;
     Ok(id)
@@ -99,7 +103,7 @@ pub fn insert_entry(conn: &Connection, entry: &NewEntry) -> Result<String, rusql
 
 pub fn get_entry(conn: &Connection, id: &str) -> Result<Option<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, local_only
          FROM entries WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id], row_to_entry)?;
@@ -114,7 +118,7 @@ pub fn get_entries(
     favorites_only: bool,
 ) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut sql = String::from(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, local_only
          FROM entries WHERE 1=1",
     );
 
@@ -144,7 +148,7 @@ pub fn search_entries(
         .replace('_', "\\_");
     let pattern = format!("%{escaped}%");
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, local_only
          FROM entries
          WHERE content_type = 'text' AND CAST(content AS TEXT) LIKE ?1 ESCAPE '\\'
          ORDER BY last_used_at DESC
@@ -241,7 +245,7 @@ pub fn touch_entry_by_hash(conn: &Connection, hash: &[u8]) -> Result<bool, rusql
 
 pub fn get_all_entries(conn: &Connection) -> Result<Vec<ClipboardEntry>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes
+        "SELECT id, content, content_type, content_hash, last_used_at, is_favorite, size_bytes, local_only
          FROM entries ORDER BY last_used_at ASC",
     )?;
     let entries = stmt
@@ -260,6 +264,7 @@ fn row_to_entry(row: &rusqlite::Row) -> Result<ClipboardEntry, rusqlite::Error> 
         last_used_at: row.get(4)?,
         is_favorite: row.get::<_, i32>(5)? != 0,
         size_bytes: row.get(6)?,
+        local_only: row.get(7)?,
     })
 }
 
@@ -281,6 +286,7 @@ mod tests {
             content_hash: vec![7, 8, 9],
             size_bytes: 100,
             is_favorite: false,
+            local_only: false,
         }
     }
 
@@ -292,6 +298,22 @@ mod tests {
         let retrieved = get_entry(&conn, &id).unwrap().unwrap();
         assert_eq!(retrieved.content, entry.content);
         assert_eq!(retrieved.size_bytes, 100);
+        assert!(!retrieved.local_only);
+    }
+
+    #[test]
+    fn local_only_is_stored() {
+        let conn = setup_db();
+        let id = insert_entry(
+            &conn,
+            &NewEntry {
+                local_only: true,
+                ..sample_entry()
+            },
+        )
+        .unwrap();
+        assert!(get_entry(&conn, &id).unwrap().unwrap().local_only);
+        assert!(get_all_entries(&conn).unwrap()[0].local_only);
     }
 
     #[test]

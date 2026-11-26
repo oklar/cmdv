@@ -390,10 +390,15 @@ pub fn run() {
             commands::vault::reset_vault,
             commands::recovery::save_recovery_phrase,
             commands::recovery::show_recovery_qr,
+            commands::recovery::begin_phrase_change,
+            commands::recovery::cancel_phrase_change,
             commands::vault::export_database,
             commands::vault::import_database,
             commands::sync::sync_now,
+            commands::sync::sync_on_window_open,
             commands::sync::get_sync_status,
+            commands::sync::finish_phrase_change,
+            commands::sync::enter_new_phrase,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

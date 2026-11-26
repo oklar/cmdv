@@ -17,6 +17,7 @@ use crate::storage::SeedStore;
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
 const OS_AUTH_MESSAGE: &str = "Confirm it's you to show your cmdv recovery phrase";
+const OS_AUTH_CHANGE_MESSAGE: &str = "Confirm it's you to change your cmdv recovery phrase";
 
 fn ensure_unlocked(vault: &VaultState) -> Result<(), String> {
     if vault.keys.lock().map_err(|_| "Lock poisoned")?.is_none() {
@@ -25,9 +26,16 @@ fn ensure_unlocked(vault: &VaultState) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_setup_in_progress(vault: &VaultState) -> Result<(), String> {
-    if vault.setup_complete.load(Ordering::Relaxed) {
-        return Err("The recovery phrase can only be saved during setup.".into());
+fn ensure_phrase_can_be_saved(vault: &VaultState) -> Result<(), String> {
+    let changing = vault
+        .pending_phrase
+        .lock()
+        .map_err(|_| "Lock poisoned")?
+        .is_some();
+    if vault.setup_complete.load(Ordering::Relaxed) && !changing {
+        return Err(
+            "The recovery phrase can only be saved during setup or a phrase change.".into(),
+        );
     }
     Ok(())
 }
@@ -40,10 +48,86 @@ fn recovery_words(vault: &VaultState) -> Result<Zeroizing<Vec<String>>, String> 
     seed.zeroize();
     let master_key = MasterKey::from_bytes(bytes);
     bytes.zeroize();
+    words_of(&master_key)
+}
 
+fn words_of(master_key: &MasterKey) -> Result<Zeroizing<Vec<String>>, String> {
     let mnemonic = bip39::Mnemonic::from_entropy(master_key.as_bytes())
         .map_err(|e| format!("BIP39 error: {e}"))?;
     Ok(Zeroizing::new(mnemonic.words().map(String::from).collect()))
+}
+
+/// The phrase to save: the new one during a phrase change, otherwise the current one.
+fn words_to_save(vault: &VaultState) -> Result<Zeroizing<Vec<String>>, String> {
+    let pending = vault.pending_phrase.lock().map_err(|_| "Lock poisoned")?;
+    match pending.as_ref() {
+        Some(master_key) => words_of(master_key),
+        None => {
+            drop(pending);
+            recovery_words(vault)
+        }
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PhraseChange {
+    Started { words: Vec<String> },
+    AuthUnavailable,
+    Cancelled,
+}
+
+/// Starts a phrase change: after the OS check, makes a new phrase and keeps it here until
+/// `finish_phrase_change`. The words go to the window so the user can write them down, as in
+/// setup. `allow_without_os_auth` only matters on devices without Windows Hello.
+#[tauri::command]
+pub async fn begin_phrase_change(
+    window: WebviewWindow,
+    vault: State<'_, Arc<VaultState>>,
+    db: State<'_, Arc<crate::db::Database>>,
+    allow_without_os_auth: bool,
+) -> Result<PhraseChange, String> {
+    ensure_unlocked(&vault)?;
+    let synced: Option<u32> = db
+        .with_conn(|c| {
+            crate::db::sync_state::meta(c, crate::db::sync_state::META_KEY_VERSION)
+        })
+        .map_err(|e| e.to_string())?;
+    if synced.is_none() {
+        return Err(crate::sync::engine::SyncError::NotSetUp.to_string());
+    }
+
+    match confirm_user(&window, OS_AUTH_CHANGE_MESSAGE).await? {
+        OsAuth::Verified => {}
+        OsAuth::Cancelled => return Ok(PhraseChange::Cancelled),
+        OsAuth::Unavailable if allow_without_os_auth => {}
+        OsAuth::Unavailable => return Ok(PhraseChange::AuthUnavailable),
+    }
+
+    let master_key = MasterKey::generate();
+    let words = words_of(&master_key)?;
+    *vault.pending_phrase.lock().map_err(|_| "Lock poisoned")? = Some(master_key);
+    Ok(PhraseChange::Started {
+        words: words.to_vec(),
+    })
+}
+
+#[tauri::command]
+pub fn cancel_phrase_change(vault: State<'_, Arc<VaultState>>) -> Result<(), String> {
+    *vault.pending_phrase.lock().map_err(|_| "Lock poisoned")? = None;
+    Ok(())
+}
+
+async fn confirm_user(window: &WebviewWindow, message: &'static str) -> Result<OsAuth, String> {
+    let native_window = native_window_handle(window);
+    crate::OS_AUTH_PROMPT_OPEN.store(true, Ordering::Relaxed);
+    let auth = tauri::async_runtime::spawn_blocking(move || {
+        os_auth::verify_user(native_window, message)
+    })
+    .await;
+    crate::OS_AUTH_PROMPT_OPEN.store(false, Ordering::Relaxed);
+    let _ = window.set_focus();
+    auth.map_err(|e| e.to_string())?
 }
 
 /// Returns false if the user cancels the save dialog.
@@ -53,7 +137,7 @@ pub async fn save_recovery_phrase(
     vault: State<'_, Arc<VaultState>>,
     format: String,
 ) -> Result<bool, String> {
-    ensure_setup_in_progress(&vault)?;
+    ensure_phrase_can_be_saved(&vault)?;
     ensure_unlocked(&vault)?;
     let format = SaveFormat::parse(&format)?;
 
@@ -75,7 +159,7 @@ pub async fn save_recovery_phrase(
     };
     let path = picked.into_path().map_err(|e| e.to_string())?;
 
-    let words = recovery_words(&vault)?;
+    let words = words_to_save(&vault)?;
     match format {
         SaveFormat::Pdf => write_pdf(&path, &words)?,
         SaveFormat::Text => {
@@ -142,16 +226,7 @@ pub async fn show_recovery_qr(
 ) -> Result<RecoveryQr, String> {
     ensure_unlocked(&vault)?;
 
-    let native_window = native_window_handle(&window);
-    crate::OS_AUTH_PROMPT_OPEN.store(true, Ordering::Relaxed);
-    let auth = tauri::async_runtime::spawn_blocking(move || {
-        os_auth::verify_user(native_window, OS_AUTH_MESSAGE)
-    })
-    .await;
-    crate::OS_AUTH_PROMPT_OPEN.store(false, Ordering::Relaxed);
-    let _ = window.set_focus();
-
-    match auth.map_err(|e| e.to_string())?? {
+    match confirm_user(&window, OS_AUTH_MESSAGE).await? {
         OsAuth::Verified => {}
         OsAuth::Cancelled => return Ok(RecoveryQr::Cancelled),
         OsAuth::Unavailable if allow_without_os_auth => {}
@@ -321,11 +396,16 @@ mod tests {
     }
 
     #[test]
-    fn save_is_refused_after_setup() {
+    fn save_is_refused_after_setup_unless_the_phrase_is_changing() {
         let vault = VaultState::new();
-        assert!(ensure_setup_in_progress(&vault).is_ok());
+        assert!(ensure_phrase_can_be_saved(&vault).is_ok());
         vault.setup_complete.store(true, Ordering::Relaxed);
-        assert!(ensure_setup_in_progress(&vault).is_err());
+        assert!(ensure_phrase_can_be_saved(&vault).is_err());
+
+        *vault.pending_phrase.lock().unwrap() = Some(MasterKey::from_bytes([4u8; 32]));
+        assert!(ensure_phrase_can_be_saved(&vault).is_ok());
+        let words = words_to_save(&vault).unwrap();
+        assert_eq!(words.join(" "), words_of(&MasterKey::from_bytes([4u8; 32])).unwrap().join(" "));
     }
 
     #[test]

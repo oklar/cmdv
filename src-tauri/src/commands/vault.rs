@@ -66,8 +66,7 @@ pub fn setup_vault(
         Mnemonic::from_entropy(master_key.as_bytes()).map_err(|e| format!("BIP39 error: {}", e))?;
     let words: Vec<String> = mnemonic.words().map(String::from).collect();
 
-    let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
-    db.set_encryption_key(&app_keys.db_key)?;
+    let app_keys = open_vault(&master_key, &db)?;
     keychain.save_seed(master_key.as_bytes())?;
 
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
@@ -105,8 +104,16 @@ pub fn try_auto_unlock(
             let master_key = MasterKey::from_bytes(bytes);
             bytes.zeroize();
 
-            let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
-            db.set_encryption_key(&app_keys.db_key)?;
+            let app_keys = match open_vault(&master_key, &db) {
+                Ok(keys) => keys,
+                Err(e) => {
+                    // A phrase rotation that stopped after re-encrypting the database but
+                    // before saving the new phrase leaves a keychain key that can't open it.
+                    // The recovery form then takes the new phrase.
+                    log::warn!("The keychain's key doesn't open the database: {e}");
+                    return Ok(false);
+                }
+            };
             *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
 
             start_monitoring(&vault, &db, &settings_db);
@@ -127,25 +134,11 @@ pub fn recover_vault(
     settings_db: State<'_, Arc<SettingsDb>>,
     db: State<'_, Arc<Database>>,
 ) -> Result<(), String> {
-    let mnemonic = Mnemonic::parse_normalized(mnemonic_words.trim())
-        .map_err(|e| format!("Invalid recovery phrase: {}", e))?;
-    let mut entropy = mnemonic.to_entropy();
-    if entropy.len() != 32 {
-        entropy.zeroize();
-        return Err("Recovery phrase must be 24 words".into());
-    }
-
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&entropy);
-    entropy.zeroize();
-    let master_key = MasterKey::from_bytes(bytes);
-    bytes.zeroize();
-
-    let app_keys = AppKeys::new(master_key.derive_hash_key(), master_key.derive_db_key());
+    let master_key = master_from_phrase(&mnemonic_words)?;
 
     // Validate the key against the local DB (if any) before persisting it, so a wrong phrase
     // can't poison the keychain and lock the user out on the next launch.
-    db.set_encryption_key(&app_keys.db_key)?;
+    let app_keys = open_vault(&master_key, &db)?;
     KeychainStore::new().save_seed(master_key.as_bytes())?;
 
     *vault.keys.lock().map_err(|_| "Lock poisoned")? = Some(app_keys);
@@ -198,7 +191,47 @@ pub fn reset_vault(
     Ok(())
 }
 
-fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<SettingsDb>) {
+pub(crate) fn master_from_phrase(words: &str) -> Result<MasterKey, String> {
+    let mnemonic = Mnemonic::parse_normalized(words.trim())
+        .map_err(|e| format!("Invalid recovery phrase: {}", e))?;
+    let mut entropy = mnemonic.to_entropy();
+    if entropy.len() != 32 {
+        entropy.zeroize();
+        return Err("Recovery phrase must be 24 words".into());
+    }
+
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&entropy);
+    entropy.zeroize();
+    let master_key = MasterKey::from_bytes(bytes);
+    bytes.zeroize();
+    Ok(master_key)
+}
+
+/// Opens the database with the phrase's key. The hash key is the one kept from before a phrase
+/// rotation if there is one, so the entries' content hashes still match.
+pub(crate) fn open_vault(master_key: &MasterKey, db: &Database) -> Result<AppKeys, String> {
+    let mut db_key = master_key.derive_db_key();
+    let opened = db.set_encryption_key(&db_key);
+    if let Err(e) = opened {
+        db_key.zeroize();
+        return Err(e);
+    }
+    let mut hash_key = match db.stored_hash_key() {
+        Ok(Some(stored)) => stored,
+        Ok(None) => master_key.derive_hash_key(),
+        Err(e) => {
+            db_key.zeroize();
+            return Err(e.to_string());
+        }
+    };
+    let keys = AppKeys::new(hash_key, db_key);
+    hash_key.zeroize();
+    db_key.zeroize();
+    Ok(keys)
+}
+
+pub(crate) fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<SettingsDb>) {
     vault.monitor_stop.store(true, Ordering::Relaxed);
     std::thread::sleep(Duration::from_millis(100));
 
@@ -248,6 +281,7 @@ fn start_monitoring(vault: &VaultState, db: &Arc<Database>, settings_db: &Arc<Se
     });
 
     log::info!("Clipboard monitoring started");
+    crate::commands::sync::request_fetch();
 }
 
 /// Returns None if the user cancels the save dialog.
@@ -348,11 +382,8 @@ pub async fn import_database(
             .to_string()
     })?;
 
-    let local_entries = db.get_all_entries().map_err(|e| e.to_string())?;
-    let merged = crate::sync::conflict::merge_entries(&local_entries, &blob.entries);
-
     let mut imported = 0;
-    for entry in &merged {
+    for entry in &blob.entries {
         if !db
             .entry_exists_by_hash(&entry.content_hash)
             .map_err(|e| e.to_string())?
@@ -363,6 +394,7 @@ pub async fn import_database(
                 content_hash: entry.content_hash.clone(),
                 size_bytes: entry.size_bytes,
                 is_favorite: entry.is_favorite,
+                local_only: entry.local_only,
             };
             db.insert_entry(&new_entry).map_err(|e| e.to_string())?;
             imported += 1;

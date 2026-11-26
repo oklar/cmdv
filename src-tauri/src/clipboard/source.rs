@@ -39,6 +39,19 @@ pub fn clipboard_marked_private() -> bool {
     }
 }
 
+/// The copying app allows the content in local history but asks that it never be uploaded
+/// (`CanUploadToCloudClipboard = 0`). Such entries are kept on this device and never synced.
+pub fn clipboard_marked_local_only() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        clipboard_marked_local_only_windows()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
 /// arboard reads the clipboard over X11 (XWayland on Wayland), so the hint is read the same way.
 #[cfg(target_os = "linux")]
 fn clipboard_marked_private_x11() -> Option<bool> {
@@ -127,6 +140,18 @@ fn clipboard_marked_private_windows() -> bool {
         return read_clipboard_u32(history).map_or(true, |value| value == 0);
     }
 
+    false
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_marked_local_only_windows() -> bool {
+    use windows_sys::Win32::System::DataExchange::IsClipboardFormatAvailable;
+
+    let upload = clipboard_format("CanUploadToCloudClipboard");
+    if upload != 0 && unsafe { IsClipboardFormatAvailable(upload) } != 0 {
+        // An upload can't be taken back, so a value that can't be read counts as local-only.
+        return read_clipboard_u32(upload).map_or(true, |value| value == 0);
+    }
     false
 }
 
@@ -266,6 +291,34 @@ mod tests {
 
         clipboard.clear().unwrap();
         assert!(!clipboard_marked_private(), "an empty clipboard is not flagged");
+
+        if let Some(text) = previous {
+            clipboard.set().exclude_from_monitoring().text(text).unwrap();
+        }
+    }
+
+    /// Uses the real clipboard like the test above. Every write is also excluded from
+    /// monitoring, so a running cmdv doesn't store the test text.
+    #[test]
+    #[ignore]
+    fn cloud_upload_marker_is_detected() {
+        let mut clipboard = arboard::Clipboard::new().unwrap();
+        let previous = clipboard.get_text().ok();
+
+        clipboard
+            .set()
+            .exclude_from_monitoring()
+            .exclude_from_cloud()
+            .text("cmdv cloud marker test")
+            .unwrap();
+        assert!(clipboard_marked_local_only(), "CanUploadToCloudClipboard = 0");
+
+        clipboard
+            .set()
+            .exclude_from_monitoring()
+            .text("cmdv no cloud marker test")
+            .unwrap();
+        assert!(!clipboard_marked_local_only(), "no CanUploadToCloudClipboard");
 
         if let Some(text) = previous {
             clipboard.set().exclude_from_monitoring().text(text).unwrap();

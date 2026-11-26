@@ -6,6 +6,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { getVersion } from "@tauri-apps/api/app";
 import { disable, enable } from "@tauri-apps/plugin-autostart";
 import { QrPairing } from "./QrPairing";
+import { PhraseChange } from "./PhraseChange";
 import { AccountPanel } from "./AccountPanel";
 
 interface AppSettings {
@@ -23,10 +24,13 @@ interface SyncStatus {
   syncing: boolean;
   last_synced_at: string | null;
   last_error: string | null;
+  // Another device changed the recovery phrase; this one needs the new phrase.
+  needs_new_phrase: boolean;
 }
 
 export function Settings() {
   const [showQr, setShowQr] = useState(false);
+  const [changingPhrase, setChangingPhrase] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [stats, setStats] = useState<{
     total_entries: number;
@@ -51,6 +55,10 @@ export function Settings() {
     return <QrPairing onClose={() => setShowQr(false)} />;
   }
 
+  if (changingPhrase) {
+    return <PhraseChange onClose={() => setChangingPhrase(false)} />;
+  }
+
   if (!settings) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -73,7 +81,7 @@ export function Settings() {
     <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
       <AccountPanel />
 
-      <CloudSyncSection />
+      <CloudSyncSection onChangePhrase={() => setChangingPhrase(true)} />
 
       {stats && (
         <section>
@@ -218,7 +226,7 @@ function formatSyncedAt(millis: string | null): string {
   return `Synced ${date.toLocaleDateString()}`;
 }
 
-function CloudSyncSection() {
+function CloudSyncSection({ onChangePhrase }: { onChangePhrase: () => void }) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState<SyncStatus | null>(null);
 
@@ -258,6 +266,7 @@ function CloudSyncSection() {
         syncing: false,
         last_synced_at: prev?.last_synced_at ?? null,
         last_error: String(err),
+        needs_new_phrase: prev?.needs_new_phrase ?? false,
       }));
     }
   };
@@ -272,7 +281,7 @@ function CloudSyncSection() {
     <section>
       <h2 className="section-label">Cloud Sync</h2>
       <div className="group-card">
-        <SettingRow label="Automatic backup" description={description}>
+        <SettingRow label="Sync between devices" description={description}>
           <button
             onClick={handleSyncNow}
             disabled={!loggedIn || syncing}
@@ -285,8 +294,68 @@ function CloudSyncSection() {
         {lastError && (
           <div className="px-3 py-2 text-xs text-destructive">{lastError}</div>
         )}
+
+        {status?.needs_new_phrase && <NewPhraseForm />}
+
+        <SettingRow
+          label="Recovery phrase"
+          description="Make a new phrase and encrypt your synced history again"
+        >
+          <button
+            onClick={onChangePhrase}
+            disabled={!loggedIn || entitled !== true || !!status?.needs_new_phrase}
+            className="btn btn-sm btn-outline"
+          >
+            Change
+          </button>
+        </SettingRow>
       </div>
     </section>
+  );
+}
+
+/** Shown when another device changed the recovery phrase. */
+function NewPhraseForm() {
+  const [words, setWords] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!words.trim()) {
+      setError("Enter the new recovery phrase.");
+      return;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await invoke("enter_new_phrase", { mnemonicWords: words.trim() });
+      setWords("");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-2 px-3 py-2.5">
+      <textarea
+        value={words}
+        onChange={(e) => setWords(e.target.value)}
+        placeholder="Enter the new 24-word recovery phrase, separated by spaces"
+        rows={3}
+        className="field resize-none font-mono"
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <button
+        type="submit"
+        disabled={saving}
+        className="btn btn-sm btn-primary w-full"
+      >
+        {saving ? "Switching..." : "Use the new phrase"}
+      </button>
+    </form>
   );
 }
 
