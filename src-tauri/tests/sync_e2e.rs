@@ -410,13 +410,20 @@ async fn the_server_trims_and_refuses_pins_over_the_limit(env: &Env) {
     assert!(a.has("small") && a.has(big(0)));
     assert!(b.has("small"));
 
+    // The pin limit starts from a new server file, since the uploads above used half of the
+    // day's 100 MiB and pinning would upload all eleven again.
+    env.reset_server();
+    let c = Device::new(env, 1);
     for n in 0..11 {
-        a.toggle_favorite(big(n));
+        c.copy(big(n));
+        c.toggle_favorite(big(n));
     }
-    let report = a.sync().await;
+    let report = c.sync().await;
     assert!(report.pinned_limit);
-    assert!(!a.entry(big(10)).unwrap().is_favorite);
-    assert!((0..10).all(|n| a.entry(big(n)).unwrap().is_favorite));
+    let unpinned = (0..11)
+        .filter(|&n| !c.entry(big(n)).unwrap().is_favorite)
+        .count();
+    assert_eq!(unpinned, 1);
 }
 
 async fn deletes_survive_a_server_restore(env: &Env) {
